@@ -2,104 +2,93 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>3D Движок + Редактор карт + Мини-карта</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Дрон: Система Видеонаблюдения</title>
+    <!-- Tailwind CSS for modern responsive layout -->
+    <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body {
-            background: #222;
+            background-color: #111;
             color: #fff;
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-            box-sizing: border-box;
-        }
-        .game-container {
-            position: relative;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+            font-family: 'Inter', sans-serif;
         }
         canvas {
-            border: 2px solid #555;
-            background: #000;
-            display: block;
-        }
-        .editor-container {
-            margin-top: 20px;
-            background: #333;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #555;
-            text-align: center;
-        }
-        .editor-grid {
-            display: grid;
-            grid-template-columns: repeat(8, 40px);
-            grid-gap: 2px;
-            margin-top: 10px;
-            background: #222;
-            padding: 5px;
-            border-radius: 4px;
+            image-rendering: pixelated;
         }
         .cell {
-            width: 40px;
-            height: 40px;
-            background: #444;
-            border: 1px solid #555;
-            cursor: pointer;
-            transition: background 0.1s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            user-select: none;
+            transition: all 0.15s ease;
+        }
+        .cell:hover {
+            transform: scale(1.05);
         }
         .cell.wall {
-            background: #00ff00;
-            border-color: #00cc00;
-        }
-        .cell.player-cell {
-            position: relative;
-        }
-        .cell.player-cell::after {
-            content: "🤠";
-            font-size: 18px;
-        }
-        .instructions {
-            margin-top: 10px;
-            font-size: 13px;
-            color: #aaa;
+            background-color: #22c55e;
+            box-shadow: 0 0 8px rgba(34, 197, 94, 0.6);
         }
         .cell.camera-cell {
-    background: #00bfff;
-    border-color: #008b8b;
-}
-.cell.camera-cell::after {
-    content: "📷";
-    font-size: 16px;
-}
+            background-color: #06b6d4;
+            box-shadow: 0 0 8px rgba(6, 182, 212, 0.6);
+        }
+        .cell.camera-cell::after {
+            content: "📷";
+            font-size: 14px;
+        }
+        .cell.player-cell::after {
+            content: "🛸";
+            font-size: 16px;
+        }
     </style>
 </head>
-<body>
+<body class="flex flex-col items-center justify-start min-h-screen p-4 md:p-8">
 
-    <!-- 3D Экран игры -->
-    <div class="game-container">
-        <canvas id="game" width="640" height="480"></canvas>
-    </div>
+    <div class="w-full max-w-4xl bg-neutral-900 border border-neutral-800 rounded-2xl p-4 md:p-6 shadow-2xl flex flex-col items-center gap-6">
+        
+        <!-- Header -->
+        <div class="text-center">
+            <h1 class="text-2xl md:text-3xl font-black tracking-wider text-green-500 flex items-center justify-center gap-2">
+                <span>🛸</span> DRONE SURVEILLANCE SYSTEM 3D
+            </h1>
+            <p class="text-xs md:text-sm text-neutral-400 mt-1">
+                Инерционный симулятор квадрокоптера с системой фиксированных CCTV камер
+            </p>
+        </div>
 
-    <!-- Редактор карты под экраном -->
-    <div class="editor-container">
-        <h3>🛠️ Интерактивный редактор карты</h3>
-        <p style="margin: 0; font-size: 14px; color: #ccc;">Кликайте по ячейкам, чтобы строить или убирать стены в реальном времени</p>
-        <div class="editor-grid" id="mapEditor"></div>
-        <div class="instructions">Управление: <b>Стрелочки</b> — движение и поворот камеры</div>
+        <!-- 3D Viewport -->
+        <div class="relative border-4 border-neutral-800 rounded-xl overflow-hidden bg-black shadow-lg w-full max-w-[640px] aspect-[4/3]">
+            <canvas id="game" width="640" height="480" class="w-full h-full block"></canvas>
+        </div>
+
+        <!-- Mobile Touch Controls -->
+        <div class="flex md:hidden gap-4 justify-center items-center w-full max-w-[320px]">
+            <div class="grid grid-cols-3 gap-2 w-full">
+                <div></div>
+                <button id="touch-up" class="bg-neutral-800 active:bg-green-600 text-white font-bold p-4 rounded-xl text-center select-none shadow-md">▲</button>
+                <div></div>
+                <button id="touch-left" class="bg-neutral-800 active:bg-green-600 text-white font-bold p-4 rounded-xl text-center select-none shadow-md">◀</button>
+                <div class="bg-neutral-950 rounded-xl flex items-center justify-center text-xs text-neutral-600">ДРОН</div>
+                <button id="touch-right" class="bg-neutral-800 active:bg-green-600 text-white font-bold p-4 rounded-xl text-center select-none shadow-md">▶</button>
+                <div></div>
+                <button id="touch-down" class="bg-neutral-800 active:bg-green-600 text-white font-bold p-4 rounded-xl text-center select-none shadow-md">▼</button>
+                <div></div>
+            </div>
+        </div>
+
+        <!-- Map Editor -->
+        <div class="w-full bg-neutral-950 border border-neutral-800 p-4 rounded-xl flex flex-col items-center">
+            <h3 class="text-sm font-bold text-neutral-300 tracking-wider mb-2 flex items-center gap-2">
+                <span>🛠️</span> ИНТЕРАКТИВНЫЙ РЕДАКТОР КАРТЫ
+            </h3>
+            <p class="text-xs text-neutral-500 mb-4 text-center">
+                Клик 1: Стена (Зеленый) | Клик 2: Фиксированная камера (Синий) | Клик 3: Удалить элемент
+            </p>
+            <div class="editor-grid grid grid-cols-8 gap-1 p-2 bg-neutral-900 rounded-lg border border-neutral-800" id="mapEditor"></div>
+            <div class="hidden md:block text-xs text-neutral-500 mt-4 text-center">
+                Управление: <span class="bg-neutral-800 text-neutral-300 px-1.5 py-0.5 rounded font-mono">Стрелки на клавиатуре</span> — полет (страница не прокручивается)
+            </div>
+        </div>
     </div>
 
 <script>
-    // Список активных камер на карте
-let securityCameras = [];
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 const editorGrid = document.getElementById('mapEditor');
@@ -107,7 +96,7 @@ const editorGrid = document.getElementById('mapEditor');
 const canvasWidth = canvas.width;
 const canvasHeight = canvas.height;
 
-// Карта 8x7 (как в ваших примерах)
+// Карта 8x7 (0 - пустота, 1 - стена, 2 - камера)
 let map = [
     [1, 1, 1, 1, 1, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 1],
@@ -121,61 +110,98 @@ let map = [
 const mapRows = map.length;
 const mapCols = map[0].length;
 
-// Векторный игрок (Скриншот 2)
+// Физическая модель дрона (направление векторов + плавная инерция)
 let player = {
     x: 3.5,
     y: 3.5,
     dirX: 1.0,   
     dirY: 0.0,
     planeX: 0.0, 
-    planeY: 0.66,
+    planeY: 0.66, // Задает FOV ~66 градусов
     
-    // Новые параметры для дрона:
-    velocity: 0,      // Текущая скорость вперед/назад
-    rotVelocity: 0,   // Текущая скорость поворота
-    maxSpeed: 0.04,   // Максимальная скорость движения
-    maxRotSpeed: 0.04,// Максимальная скорость поворота
-    accel: 0.004,     // Ускорение (тяга двигателей дрона)
-    friction: 0.85    // Трение/сопротивление воздуха (1 - нет трения, 0 - мгновенный стоп)
+    velocity: 0,      
+    rotVelocity: 0,   
+    maxSpeed: 0.04,   // 30 км/ч в игровом масштабе
+    maxRotSpeed: 0.04,
+    accel: 0.003,     
+    friction: 0.88    
 };
+
+// Хранение данных камер
+let securityCameras = [];
+
+// Инициализация стартовой камеры
+securityCameras.push({
+    x: 5.5,
+    y: 1.5,
+    angle: Math.atan2(3.5 - 1.5, 3.5 - 5.5) // смотрит на игрока при старте
+});
+map[1][5] = 2; // Устанавливаем в сетку
 
 let keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 
-window.addEventListener('keydown', e => { if(e.code in keys) {    keys[e.code] = true;
+// Перехват кнопок клавиатуры с предотвращением скролла страницы
+window.addEventListener('keydown', e => { 
+    if(e.code in keys) {
+        keys[e.code] = true;
+        e.preventDefault(); 
+    } 
+});
+window.addEventListener('keyup', e => { 
+    if(e.code in keys) {
+        keys[e.code] = false;
         e.preventDefault();
     } 
 });
-window.addEventListener('keyup', e => { if(e.code in keys) keys[e.code] = false; });
 
-// --- ИНИЦИАЛИЗАЦИЯ РЕДАКТОРА КАРТЫ ---
+// Сенсорное управление для мобильных устройств
+const bindTouchButton = (id, keyName) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    const setKey = (val, e) => {
+        keys[keyName] = val;
+        e.preventDefault();
+    };
+    btn.addEventListener('touchstart', e => setKey(true, e), { passive: false });
+    btn.addEventListener('touchend', e => setKey(false, e), { passive: false });
+    btn.addEventListener('mousedown', e => setKey(true, e));
+    btn.addEventListener('mouseup', e => setKey(false, e));
+    btn.addEventListener('mouseleave', e => setKey(false, e));
+};
+
+bindTouchButton('touch-up', 'ArrowUp');
+bindTouchButton('touch-down', 'ArrowDown');
+bindTouchButton('touch-left', 'ArrowLeft');
+bindTouchButton('touch-right', 'ArrowRight');
+
 function createEditor() {
     editorGrid.innerHTML = '';
     for (let r = 0; r < mapRows; r++) {
         for (let c = 0; c < mapCols; c++) {
             const cell = document.createElement('div');
-            cell.classList.add('cell');
+            cell.className = 'cell w-10 h-10 bg-neutral-800 border border-neutral-700 cursor-pointer rounded flex items-center justify-center font-bold text-xs select-none';
             
             if (map[r][c] === 1) cell.classList.add('wall');
             if (map[r][c] === 2) cell.classList.add('camera-cell');
             if (Math.floor(player.y) === r && Math.floor(player.x) === c) cell.classList.add('player-cell');
 
             cell.addEventListener('click', () => {
+                // Исключаем редактирование клетки с игроком
                 if (Math.floor(player.y) === r && Math.floor(player.x) === c) return;
                 
-                // Циклическое переключение: 0 (пусто) -> 1 (стена) -> 2 (камера) -> 0
                 if (map[r][c] === 0) {
                     map[r][c] = 1;
-                    cell.classList.add('wall');
+                    cell.className = 'cell w-10 h-10 cursor-pointer rounded flex items-center justify-center font-bold text-xs select-none wall';
                 } else if (map[r][c] === 1) {
                     map[r][c] = 2;
-                    cell.classList.remove('wall');
-                    cell.classList.add('camera-cell');
-                    // Добавляем камеру в систему (по умолчанию смотрит в центр карты)
-                    securityCameras.push({ x: c + 0.5, y: r + 0.5, angle: 0 });
+                    cell.className = 'cell w-10 h-10 cursor-pointer rounded flex items-center justify-center font-bold text-xs select-none camera-cell';
+                    
+                    // Установка камеры: угол фиксирован строго на дрон в момент постройки
+                    let angleToPlayer = Math.atan2(player.y - (r + 0.5), player.x - (c + 0.5));
+                    securityCameras.push({ x: c + 0.5, y: r + 0.5, angle: angleToPlayer });
                 } else {
                     map[r][c] = 0;
-                    cell.classList.remove('camera-cell');
-                    // Удаляем камеру из системы
+                    cell.className = 'cell w-10 h-10 bg-neutral-800 border border-neutral-700 cursor-pointer rounded flex items-center justify-center font-bold text-xs select-none';
                     securityCameras = securityCameras.filter(cam => Math.floor(cam.x) !== c || Math.floor(cam.y) !== r);
                 }
             });
@@ -184,7 +210,6 @@ function createEditor() {
     }
 }
 
-// Обновление положения маркера игрока в редакторе
 function updateEditorPlayerMarker() {
     const cells = editorGrid.children;
     const pR = Math.floor(player.y);
@@ -199,58 +224,9 @@ function updateEditorPlayerMarker() {
         cells[index].classList.add('player-cell');
     }
 }
-function drawHUD() {
-    // Вычисляем процент скорости для шкалы
-    let speedPercent = Math.abs(player.velocity) / player.maxSpeed;
-    let rotPercent = Math.abs(player.rotVelocity) / player.maxRotSpeed;
 
-    // Смещение, чтобы рисовать в правом верхнем углу
-    const hudX = canvasWidth - 190;
-    const hudY = 15;
-
-    // Полупрозрачная подложка для интерфейса
-    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
-    ctx.fillRect(hudX, hudY, 175, 90);
-    ctx.strokeStyle = "rgba(0, 255, 0, 0.3)";
-    ctx.lineWidth = 1;
-    ctx.strokeRect(hudX, hudY, 175, 90);
-
-    // Заголовок телеметрии
-    ctx.font = "bold 11px monospace";
-    ctx.fillStyle = "#00ff00";
-    ctx.fillText("🛸 DRONE TELEMETRY", hudX + 10, hudY + 20);
-
-    // 1. Линейная скорость (Вперед/Назад)
-    ctx.fillStyle = "#aaa";
-    ctx.font = "10px monospace";
-    // Переводим внутреннюю скорость в условные км/ч для красоты
-    let speedKmH = Math.round(speedPercent * 30); 
-    ctx.fillText(`SPEED: ${speedKmH} km/h`, hudX + 10, hudY + 42);
-
-    // Шкала скорости (Рамка)
-    ctx.strokeStyle = "#555";
-    ctx.strokeRect(hudX + 10, hudY + 48, 155, 6);
-    // Заполнение шкалы (Зеленая полоса)
-    ctx.fillStyle = speedPercent > 0.8 ? "#ff3333" : "#00ff00"; // Краснеет на максимуме
-    ctx.fillRect(hudX + 11, hudY + 49, speedPercent * 153, 4);
-
-    // 2. Угловая скорость (Поворот)
-    ctx.fillStyle = "#aaa";
-    let rotDirection = player.rotVelocity > 0 ? "RIGHT" : player.rotVelocity < 0 ? "LEFT" : "STABLE";
-    ctx.fillText(`TURN: ${rotDirection}`, hudX + 10, hudY + 72);
-
-    // Маленький индикатор поворота
-    ctx.fillStyle = "#555";
-    ctx.fillRect(hudX + 10, hudY + 78, 155, 4);
-    ctx.fillStyle = "#00bfff"; // Синий маркер вращения
-    
-    // Рисуем ползунок отклонения от центра
-    let center = hudX + 10 + (155 / 2);
-    let offset = (player.rotVelocity / player.maxRotSpeed) * (155 / 2);
-    ctx.fillRect(center + offset - 3, hudY + 78, 6, 4);
-}
 function updatePlayer() {
-    // 1. Управление двигателями поворота (рыскание)
+    // Вращение
     if (keys.ArrowRight) {
         player.rotVelocity += player.accel;
         if (player.rotVelocity > player.maxRotSpeed) player.rotVelocity = player.maxRotSpeed;
@@ -258,11 +234,9 @@ function updatePlayer() {
         player.rotVelocity -= player.accel;
         if (player.rotVelocity < -player.maxRotSpeed) player.rotVelocity = -player.maxRotSpeed;
     } else {
-        // Если стрелки не нажаты, дрон плавно тормозит вращение вращательными пропеллерами
         player.rotVelocity *= player.friction;
     }
 
-    // Применяем текущую скорость вращения к векторам камеры
     if (Math.abs(player.rotVelocity) > 0.0001) {
         let oldDirX = player.dirX;
         player.dirX = player.dirX * Math.cos(player.rotVelocity) - player.dirY * Math.sin(player.rotVelocity);
@@ -272,7 +246,7 @@ function updatePlayer() {
         player.planeY = oldPlaneX * Math.sin(player.rotVelocity) + player.planeY * Math.cos(player.rotVelocity);
     }
 
-    // 2. Управление маршевыми двигателями (вперед/назад)
+    // Движение вперед/назад
     if (keys.ArrowUp) {
         player.velocity += player.accel;
         if (player.velocity > player.maxSpeed) player.velocity = player.maxSpeed;
@@ -280,118 +254,125 @@ function updatePlayer() {
         player.velocity -= player.accel;
         if (player.velocity < -player.maxSpeed) player.velocity = -player.maxSpeed;
     } else {
-        // Сопротивление воздуха плавно останавливает летящий дрон
         player.velocity *= player.friction;
     }
 
-    // 3. Расчет движения по векторам с учетом скольжения и коллизий
     let dx = player.dirX * player.velocity;
     let dy = player.dirY * player.velocity;
 
-    // Проверка столкновений со стенами
+    // Слайдинг и детекция столкновений
     if (Math.abs(player.velocity) > 0.0001) {
         if (map[Math.floor(player.y)][Math.floor(player.x + dx)] === 0) {
             player.x += dx;
         } else {
-            player.velocity = 0; // Дрон врезался и потерял импульс
+            player.velocity = 0; 
         }
-        
         if (map[Math.floor(player.y + dy)][Math.floor(player.x)] === 0) {
             player.y += dy;
         } else {
-            player.velocity = 0; // Дрон врезался и потерял импульс
+            player.velocity = 0; 
         }
     }
 
-    // Обновляем маркер в визуальном редакторе, если дрон сдвинулся
     if (keys.ArrowUp || keys.ArrowDown || keys.ArrowLeft || keys.ArrowRight || Math.abs(player.velocity) > 0.001) {
         updateEditorPlayerMarker();
     }
 }
 
-// --- ОТРИСОВКА МИНИ-КАРТЫ ---
-function drawMinimap() {
-    const size = 16; // Размер одной плитки мини-карты в пикселях
-    const offset = 15; // Отступ мини-карты от краев экрана canvas
-    // Рисуем камеры на мини-карте
-securityCameras.forEach(cam => {
-    // Вращаем камеру по кругу со временем для эффекта патрулирования
-    cam.angle = Date.now() * 0.001; 
-    let camDirX = Math.cos(cam.angle);
-    let camDirY = Math.sin(cam.angle);
-
-    const cX = offset + cam.x * size;
-    const cY = offset + cam.y * size;
-
-    // Луч обзора камеры
-    ctx.strokeStyle = "rgba(0, 191, 255, 0.4)";
-    ctx.beginPath();
-    ctx.moveTo(cX, cY);
-    ctx.lineTo(cX + camDirX * 20, cY + camDirY * 20);
-    ctx.stroke();
-
-    // Синяя точка камеры
-    ctx.fillStyle = "#00bfff";
-    ctx.beginPath();
-    ctx.arc(cX, cY, 3, 0, Math.PI * 2);
-    ctx.fill();
-});
-    // Полупрозрачный темный фон под картой
-    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
-    ctx.fillRect(offset - 5, offset - 5, mapCols * size + 10, mapRows * size + 10);
-
-    for (let r = 0; r < mapRows; r++) {
-        for (let c = 0; c < mapCols; c++) {
-            if (map[r][c] === 1) {
-                ctx.fillStyle = "rgba(0, 255, 0, 0.8)"; // Стены зеленые
-            } else {
-                ctx.fillStyle = "rgba(85, 85, 85, 0.4)"; // Пустота серая
-            }
-            ctx.fillRect(offset + c * size, offset + r * size, size - 1, size - 1);
+// Прямая видимость (raycast) между камерой наблюдения и дроном
+function checkLineOfSight(x1, y1, x2, y2) {
+    let dx = x2 - x1;
+    let dy = y2 - y1;
+    let distance = Math.sqrt(dx * dx + dy * dy);
+    let steps = Math.ceil(distance * 15); 
+    
+    for (let i = 1; i < steps; i++) {
+        let t = i / steps;
+        let cx = x1 + dx * t;
+        let cy = y1 + dy * t;
+        if (map[Math.floor(cy)][Math.floor(cx)] === 1) {
+            return false; // Стена преграждает путь
         }
     }
+    return true; // Путь свободен
+}
 
-    // Отрисовка игрока на мини-карте
-    const pX = offset + player.x * size;
-    const pY = offset + player.y * size;
+// Отрисовка дрона на экране камеры с пропеллерами и лучами
+function drawProceduralDrone(x, y, width, height) {
+    ctx.save();
+    ctx.translate(x, y);
 
-    // Вектор взгляда
-    ctx.strokeStyle = "#ff3333";
-    ctx.lineWidth = 2;
+    let w = Math.min(width, 100); 
+    let h = Math.min(height, 70);
+    if (w < 4 || h < 4) { ctx.restore(); return; }
+
+    // Несущая рама
+    ctx.strokeStyle = "#00471b";
+    ctx.lineWidth = Math.max(1, w * 0.08);
     ctx.beginPath();
-    ctx.moveTo(pX, pY);
-    ctx.lineTo(pX + player.dirX * (size * 0.8), pY + player.dirY * (size * 0.8));
+    ctx.moveTo(-w * 0.4, -h * 0.2);
+    ctx.lineTo(w * 0.4, h * 0.2);
+    ctx.moveTo(-w * 0.4, h * 0.2);
+    ctx.lineTo(w * 0.4, -h * 0.2);
     ctx.stroke();
 
-    // Точка игрока
-    ctx.fillStyle = "#ffffff";
+    // Вращающиеся винты
+    ctx.fillStyle = "rgba(100, 255, 100, 0.2)";
+    ctx.strokeStyle = "rgba(0, 255, 0, 0.4)";
+    ctx.lineWidth = 1;
+    let rx = w * 0.18;
+    let ry = h * 0.05;
+    let propPositions = [
+        [-w * 0.4, -h * 0.2], [w * 0.4, -h * 0.2],
+        [-w * 0.4,  h * 0.2], [w * 0.4,  h * 0.2]
+    ];
+    propPositions.forEach(pos => {
+        ctx.beginPath();
+        ctx.ellipse(pos[0], pos[1], rx, ry, Math.sin(Date.now() * 0.05), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.stroke();
+    });
+
+    // Центральный блок дрона
+    ctx.fillStyle = "#22c55e";
+    ctx.strokeStyle = "#166534";
+    ctx.lineWidth = Math.max(1.5, w * 0.04);
     ctx.beginPath();
-    ctx.arc(pX, pY, 4, 0, Math.PI * 2);
+    ctx.arc(0, 0, w * 0.15, 0, Math.PI * 2);
     ctx.fill();
+    ctx.stroke();
+
+    // Мигающая лампа телеметрии (Синий LED)
+    ctx.fillStyle = (Math.floor(Date.now() / 250) % 2 === 0) ? "#06b6d4" : "#0369a1";
+    ctx.beginPath();
+    ctx.arc(0, 0, w * 0.05, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.restore();
 }
+
 function drawCCTVSubScreen() {
-    // Если на карте нет камер, ничего не выводим
     if (securityCameras.length === 0) return;
 
-    // Берём первую камеру из списка для вывода на экран
+    // Показываем изображение со старейшей камеры
     let cam = securityCameras[0];
     
-    // Размеры и позиция экрана CCTV на canvas
     const scrW = 160;
     const scrH = 120;
     const scrX = 15;
     const scrY = canvasHeight - scrH - 15;
 
-    // Фон экрана монитора
-    ctx.fillStyle = "#051505";
+    // Очистка экрана CCTV (темный монохром)
+    ctx.fillStyle = "#011202";
     ctx.fillRect(scrX, scrY, scrW, scrH);
 
-    // Рендеринг картинки с камеры (упрощенный raycasting)
     let camDirX = Math.cos(cam.angle);
     let camDirY = Math.sin(cam.angle);
-    // Вектор плоскости экрана камеры (FOV камеры)
     let camPlaneX = -Math.sin(cam.angle) * 0.5;
     let camPlaneY = Math.cos(cam.angle) * 0.5;
+
+    // Глубинный буфер для спрайта дрона
+    let wallDepths = new Array(scrW);
 
     for (let x = 0; x < scrW; x++) {
         let cameraX = 2 * x / scrW - 1;
@@ -414,57 +395,70 @@ function drawCCTVSubScreen() {
             if (sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; } 
             else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
             if (mapY < 0 || mapY >= mapRows || mapX < 0 || mapX >= mapCols) break;
-            // Камера видит и стены(1), и другие камеры(2), и самого игрока!
-            if (map[mapY][mapX] === 1 || map[mapY][mapX] === 2) { hit = 1; }
-            
-            // Проверка: видит ли камера нашего Дрона?
-            if (Math.floor(player.x) === mapX && Math.floor(player.y) === mapY && hit === 0) {
-                hit = 2; // Код обнаружения дрона
-            }
+            if (map[mapY][mapX] === 1 || map[mapY][mapX] === 2) hit = 1;
         }
 
         let perpWallDist = (side === 0) ? (mapX - cam.x + (1 - stepX) / 2) / rayDirX : (mapY - cam.y + (1 - stepY) / 2) / rayDirY;
+        wallDepths[x] = perpWallDist;
+
         let wallHeight = scrH / (perpWallDist + 0.0001);
+        let colorValue = Math.max(0, 140 - perpWallDist * 18);
         
-        // Цвет выводим в монохромном "ночном" или черно-белом режиме
-        let colorValue = Math.max(0, 180 - perpWallDist * 25);
-        if (hit === 2) {
-            ctx.fillStyle = "#ffffff"; // Дрон подсвечивается белым на мониторе!
-        } else {
-            // Зеленоватый CCTV фильтр
-            ctx.fillStyle = (side === 1) ? `rgb(0, ${colorValue * 0.6}, 0)` : `rgb(0, ${colorValue}, 0)`;
-        }
-        
+        ctx.fillStyle = (side === 1) ? `rgb(0, ${colorValue * 0.65}, 0)` : `rgb(0, ${colorValue}, 0)`;
         ctx.fillRect(scrX + x, scrY + (scrH - wallHeight) / 2, 1, wallHeight);
     }
 
-    // Рамка монитора и текст интерфейса камеры
-    ctx.strokeStyle = "#00ff00";
+    // Рендер дрона на экране камеры (перспективная проекция)
+    let spriteX = player.x - cam.x;
+    let spriteY = player.y - cam.y;
+
+    let invDet = 1.0 / (camPlaneX * camDirY - camDirX * camPlaneY);
+    let transformX = invDet * (camDirY * spriteX - camDirX * spriteY);
+    let transformY = invDet * (-camPlaneY * spriteX + camPlaneX * spriteY); // Глубина
+
+    // Проверяем видимость (находится ли дрон перед объективом)
+    if (transformY > 0.2 && checkLineOfSight(cam.x, cam.y, player.x, player.y)) {
+        let spriteScreenX = Math.floor((scrW / 2) * (1 + transformX / transformY));
+        
+        // Сверяемся с z-буфером
+        if (spriteScreenX >= 0 && spriteScreenX < scrW && transformY < wallDepths[spriteScreenX]) {
+            let spriteHeight = Math.abs(Math.floor(scrH / transformY));
+            let spriteWidth = Math.abs(Math.floor(scrH / transformY));
+            
+            let drawX = scrX + spriteScreenX;
+            let drawY = scrY + (scrH / 2); 
+            
+            drawProceduralDrone(drawX, drawY, spriteWidth, spriteHeight);
+        }
+    }
+
+    // Декоративный интерфейс CCTV
+    ctx.strokeStyle = "#0891b2";
     ctx.lineWidth = 2;
     ctx.strokeRect(scrX, scrY, scrW, scrH);
     
-    ctx.fillStyle = "#00ff00";
+    ctx.fillStyle = "#06b6d4";
     ctx.font = "bold 9px monospace";
-    ctx.fillText("CAM_01 LIVE", scrX + 8, scrY + 15);
+    ctx.fillText("CAM_01 FIXED", scrX + 8, scrY + 14);
     
-    // Эффект мигающей точки записи REC
-    if (Math.floor(Date.now() / 500) % 2 === 0) {
-        ctx.fillStyle = "#ff3333";
+    if (Math.floor(Date.now() / 350) % 2 === 0) {
+        ctx.fillStyle = "#ef4444";
         ctx.beginPath();
-        ctx.arc(scrX + scrW - 15, scrY + 12, 3, 0, Math.PI * 2);
+        ctx.arc(scrX + scrW - 12, scrY + 11, 3, 0, Math.PI * 2);
         ctx.fill();
     }
 }
+
 function draw() {
     updatePlayer();
 
-    // Рендер 3D пространства (Небо / Пол)
-    ctx.fillStyle = "#2a2a2a";
+    // Небо и Пол
+    ctx.fillStyle = "#1e1e1e";
     ctx.fillRect(0, 0, canvasWidth, canvasHeight / 2);
-    ctx.fillStyle = "#555555";
+    ctx.fillStyle = "#3a3a3a";
     ctx.fillRect(0, canvasHeight / 2, canvasWidth, canvasHeight / 2);
 
-    // Векторный Raycasting 
+    // DDA Raycasting без искажений (Скриншот 2)
     for (let x = 0; x < canvasWidth; x++) {
         let cameraX = 2 * x / canvasWidth - 1;
         let rayDirX = player.dirX + player.planeX * cameraX;
@@ -504,7 +498,6 @@ function draw() {
                 mapY += stepY;
                 side = 1;
             }
-            // Предотвращение вылета за границы массива карты при редактировании
             if (mapY < 0 || mapY >= mapRows || mapX < 0 || mapX >= mapCols) {
                 hit = 1; 
                 break;
@@ -517,7 +510,7 @@ function draw() {
         else            perpWallDist = (mapY - player.y + (1 - stepY) / 2) / rayDirY;
 
         let wallHeight = canvasHeight / (perpWallDist + 0.0001);
-        let colorValue = Math.max(0, 255 - perpWallDist * 35);
+        let colorValue = Math.max(0, 255 - perpWallDist * 32);
 
         if (side === 1) {
             ctx.fillStyle = `rgb(0, ${colorValue * 0.7}, 0)`; 
@@ -527,11 +520,105 @@ function draw() {
 
         ctx.fillRect(x, (canvasHeight - wallHeight) / 2, 1, wallHeight);
     }
-drawHUD()
-    // Поверх 3D сцены рисуем мини-карту
+
+    // Рендер мини-карты, HUD и дополнительного экрана
     drawMinimap();
-drawCCTVSubScreen();
+    drawHUD();
+    drawCCTVSubScreen();
+
     requestAnimationFrame(draw);
+}
+
+function drawMinimap() {
+    const size = 16; 
+    const offset = 15; 
+    
+    ctx.fillStyle = "rgba(0, 0, 0, 0.6)";
+    ctx.fillRect(offset - 5, offset - 5, mapCols * size + 10, mapRows * size + 10);
+
+    for (let r = 0; r < mapRows; r++) {
+        for (let c = 0; c < mapCols; c++) {
+            if (map[r][c] === 1) {
+                ctx.fillStyle = "rgba(34, 197, 94, 0.8)"; 
+            } else if (map[r][c] === 2) {
+                ctx.fillStyle = "rgba(6, 182, 212, 0.6)"; 
+            } else {
+                ctx.fillStyle = "rgba(68, 68, 68, 0.4)"; 
+            }
+            ctx.fillRect(offset + c * size, offset + r * size, size - 1, size - 1);
+        }
+    }
+
+    // Отображаем фиксированные направления установленных камер
+    securityCameras.forEach(cam => {
+        const cX = offset + cam.x * size;
+        const cY = offset + cam.y * size;
+
+        // Вектор статического взгляда камеры
+        ctx.strokeStyle = "rgba(6, 182, 212, 0.8)";
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.moveTo(cX, cY);
+        ctx.lineTo(cX + Math.cos(cam.angle) * 15, cY + Math.sin(cam.angle) * 15);
+        ctx.stroke();
+
+        ctx.fillStyle = "#06b6d4";
+        ctx.beginPath();
+        ctx.arc(cX, cY, 3, 0, Math.PI * 2);
+        ctx.fill();
+    });
+
+    // Отрисовка дрона на карте
+    const pX = offset + player.x * size;
+    const pY = offset + player.y * size;
+
+    ctx.strokeStyle = "#ef4444";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pX, pY);
+    ctx.lineTo(pX + player.dirX * 12, pY + player.dirY * 12);
+    ctx.stroke();
+
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(pX, pY, 4, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function drawHUD() {
+    let speedPercent = Math.abs(player.velocity) / player.maxSpeed;
+    const hudX = canvasWidth - 190;
+    const hudY = 15;
+
+    ctx.fillStyle = "rgba(0, 0, 0, 0.7)";
+    ctx.fillRect(hudX, hudY, 175, 90);
+    ctx.strokeStyle = "rgba(34, 197, 94, 0.4)";
+    ctx.strokeRect(hudX, hudY, 175, 90);
+
+    ctx.font = "bold 11px monospace";
+    ctx.fillStyle = "#22c55e";
+    ctx.fillText("🛸 DRONE TELEMETRY", hudX + 10, hudY + 20);
+
+    ctx.fillStyle = "#aaa";
+    ctx.font = "10px monospace";
+    let speedKmH = Math.round(speedPercent * 30); // Лимит 30 км/ч
+    ctx.fillText(`SPEED: ${speedKmH} km/h`, hudX + 10, hudY + 42);
+
+    ctx.strokeStyle = "#444";
+    ctx.strokeRect(hudX + 10, hudY + 48, 155, 6);
+    ctx.fillStyle = speedPercent > 0.85 ? "#ef4444" : "#22c55e"; 
+    ctx.fillRect(hudX + 11, hudY + 49, speedPercent * 153, 4);
+
+    ctx.fillStyle = "#aaa";
+    let rotDirection = player.rotVelocity > 0 ? "RIGHT" : player.rotVelocity < 0 ? "LEFT" : "STABLE";
+    ctx.fillText(`TURN: ${rotDirection}`, hudX + 10, hudY + 72);
+
+    ctx.fillStyle = "#444";
+    ctx.fillRect(hudX + 10, hudY + 78, 155, 4);
+    ctx.fillStyle = "#06b6d4"; 
+    let center = hudX + 10 + (155 / 2);
+    let offset = (player.rotVelocity / player.maxRotSpeed) * (155 / 2);
+    ctx.fillRect(center + offset - 3, hudY + 78, 6, 4);
 }
 
 // Запуск
