@@ -118,7 +118,15 @@ let player = {
     dirX: 1.0,   
     dirY: 0.0,
     planeX: 0.0, 
-    planeY: 0.66 
+    planeY: 0.66,
+    
+    // Новые параметры для дрона:
+    velocity: 0,      // Текущая скорость вперед/назад
+    rotVelocity: 0,   // Текущая скорость поворота
+    maxSpeed: 0.06,   // Максимальная скорость движения
+    maxRotSpeed: 0.04,// Максимальная скорость поворота
+    accel: 0.004,     // Ускорение (тяга двигателей дрона)
+    friction: 0.85    // Трение/сопротивление воздуха (1 - нет трения, 0 - мгновенный стоп)
 };
 
 let keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
@@ -174,36 +182,61 @@ function updateEditorPlayerMarker() {
 }
 
 function updatePlayer() {
-    let moveSpeed = 0.04;
-    let rotSpeed = 0.03;
-
+    // 1. Управление двигателями поворота (рыскание)
     if (keys.ArrowRight) {
-        let oldDirX = player.dirX;
-        player.dirX = player.dirX * Math.cos(rotSpeed) - player.dirY * Math.sin(rotSpeed);
-        player.dirY = oldDirX * Math.sin(rotSpeed) + player.dirY * Math.cos(rotSpeed);
-        let oldPlaneX = player.planeX;
-        player.planeX = player.planeX * Math.cos(rotSpeed) - player.planeY * Math.sin(rotSpeed);
-        player.planeY = oldPlaneX * Math.sin(rotSpeed) + player.planeY * Math.cos(rotSpeed);
-    }
-    if (keys.ArrowLeft) {
-        let oldDirX = player.dirX;
-        player.dirX = player.dirX * Math.cos(-rotSpeed) - player.dirY * Math.sin(-rotSpeed);
-        player.dirY = oldDirX * Math.sin(-rotSpeed) + player.dirY * Math.cos(-rotSpeed);
-        let oldPlaneX = player.planeX;
-        player.planeX = player.planeX * Math.cos(-rotSpeed) - player.planeY * Math.sin(-rotSpeed);
-        player.planeY = oldPlaneX * Math.sin(-rotSpeed) + player.planeY * Math.cos(-rotSpeed);
+        player.rotVelocity += player.accel;
+        if (player.rotVelocity > player.maxRotSpeed) player.rotVelocity = player.maxRotSpeed;
+    } else if (keys.ArrowLeft) {
+        player.rotVelocity -= player.accel;
+        if (player.rotVelocity < -player.maxRotSpeed) player.rotVelocity = -player.maxRotSpeed;
+    } else {
+        // Если стрелки не нажаты, дрон плавно тормозит вращение вращательными пропеллерами
+        player.rotVelocity *= player.friction;
     }
 
+    // Применяем текущую скорость вращения к векторам камеры
+    if (Math.abs(player.rotVelocity) > 0.0001) {
+        let oldDirX = player.dirX;
+        player.dirX = player.dirX * Math.cos(player.rotVelocity) - player.dirY * Math.sin(player.rotVelocity);
+        player.dirY = oldDirX * Math.sin(player.rotVelocity) + player.dirY * Math.cos(player.rotVelocity);
+        let oldPlaneX = player.planeX;
+        player.planeX = player.planeX * Math.cos(player.rotVelocity) - player.planeY * Math.sin(player.rotVelocity);
+        player.planeY = oldPlaneX * Math.sin(player.rotVelocity) + player.planeY * Math.cos(player.rotVelocity);
+    }
+
+    // 2. Управление маршевыми двигателями (вперед/назад)
     if (keys.ArrowUp) {
-        if (map[Math.floor(player.y)][Math.floor(player.x + player.dirX * moveSpeed)] === 0) player.x += player.dirX * moveSpeed;
-        if (map[Math.floor(player.y + player.dirY * moveSpeed)][Math.floor(player.x)] === 0) player.y += player.dirY * moveSpeed;
-    }
-    if (keys.ArrowDown) {
-        if (map[Math.floor(player.y)][Math.floor(player.x - player.dirX * moveSpeed)] === 0) player.x -= player.dirX * moveSpeed;
-        if (map[Math.floor(player.y - player.dirY * moveSpeed)][Math.floor(player.x)] === 0) player.y -= player.dirY * moveSpeed;
+        player.velocity += player.accel;
+        if (player.velocity > player.maxSpeed) player.velocity = player.maxSpeed;
+    } else if (keys.ArrowDown) {
+        player.velocity -= player.accel;
+        if (player.velocity < -player.maxSpeed) player.velocity = -player.maxSpeed;
+    } else {
+        // Сопротивление воздуха плавно останавливает летящий дрон
+        player.velocity *= player.friction;
     }
 
-    if (keys.ArrowUp || keys.ArrowDown || keys.ArrowLeft || keys.ArrowRight) {
+    // 3. Расчет движения по векторам с учетом скольжения и коллизий
+    let dx = player.dirX * player.velocity;
+    let dy = player.dirY * player.velocity;
+
+    // Проверка столкновений со стенами
+    if (Math.abs(player.velocity) > 0.0001) {
+        if (map[Math.floor(player.y)][Math.floor(player.x + dx)] === 0) {
+            player.x += dx;
+        } else {
+            player.velocity = 0; // Дрон врезался и потерял импульс
+        }
+        
+        if (map[Math.floor(player.y + dy)][Math.floor(player.x)] === 0) {
+            player.y += dy;
+        } else {
+            player.velocity = 0; // Дрон врезался и потерял импульс
+        }
+    }
+
+    // Обновляем маркер в визуальном редакторе, если дрон сдвинулся
+    if (keys.ArrowUp || keys.ArrowDown || keys.ArrowLeft || keys.ArrowRight || Math.abs(player.velocity) > 0.001) {
         updateEditorPlayerMarker();
     }
 }
