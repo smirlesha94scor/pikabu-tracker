@@ -1,69 +1,11 @@
 <!DOCTYPE html>
-<html lang="ru">
-<head>
-    <meta charset="UTF-8">
-    <title>Сравнение версий движка</title>
-    <style>
-        body {
-            background: #222;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            overflow: hidden;
-            font-family: sans-serif;
-        }
-        .container {
-            position: relative;
-        }
-        canvas {
-            border: 2px solid #555;
-            background: #000;
-        }
-        .ui-panel {
-            position: absolute;
-            top: 10px;
-            left: 10px;
-            background: rgba(0, 0, 0, 0.75);
-            color: #fff;
-            padding: 12px;
-            border-radius: 5px;
-            user-select: none;
-            font-size: 14px;
-        }
-        .ui-panel label {
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-    </style>
-</head>
-<body>
-
-    <div class="container">
-        <canvas id="game" width="640" height="480"></canvas>
-        
-        <div class="ui-panel">
-            <label>
-                <input type="checkbox" id="engineMode" checked>
-                Новая версия (Гладкие стены и DDA)
-            </label>
-            <div style="margin-top: 5px; font-size: 11px; color: #aaa;">
-                Снимите галочку, чтобы вернуть "как было" (ступенчатые блоки)
-            </div>
-        </div>
-    </div>
+<html>
+<body style="background:#222; display:flex; justify-content:center; align-items:center; height:100vh;">
+    <canvas id="game" width="640" height="480" style="border:2px solid #555;"></canvas>
 
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const checkbox = document.getElementById('engineMode');
-
-const canvasWidth = canvas.width;
-const canvasHeight = canvas.height;
 
 const map = [
     [1, 1, 1, 1, 1, 1, 1, 1],
@@ -75,120 +17,53 @@ const map = [
     [1, 1, 1, 1, 1, 1, 1, 1]
 ];
 
-let player = { 
-    x: 3.5, 
-    y: 3.5, 
-    angle: 0, 
-    fov: 60 * (Math.PI / 180) 
-};
+let player = { x: 3.5, y: 3.5, angle: 0 };
 
-let keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+function draw() {
+    ctx.fillStyle = "#333";
+    ctx.fillRect(0, 0, 640, 240); // Потолок
+    ctx.fillStyle = "#666";
+    ctx.fillRect(0, 240, 640, 240); // Пол
 
-window.addEventListener('keydown', e => { if(e.code in keys) keys[e.code] = true; });
-window.addEventListener('keyup', e => { if(e.code in keys) keys[e.code] = false; });
-
-function updatePlayer() {
-    let moveSpeed = 0.04;
-    let rotSpeed = 0.03;
-
-    if (keys.ArrowLeft) player.angle -= rotSpeed;
-    if (keys.ArrowRight) player.angle += rotSpeed;
-
-    let dx = Math.cos(player.angle) * moveSpeed;
-    let dy = Math.sin(player.angle) * moveSpeed;
-
-    if (keys.ArrowUp) {
-        if (map[Math.floor(player.y)][Math.floor(player.x + dx)] === 0) player.x += dx;
-        if (map[Math.floor(player.y + dy)][Math.floor(player.x)] === 0) player.y += dy;
-    }
-    if (keys.ArrowDown) {
-        if (map[Math.floor(player.y)][Math.floor(player.x - dx)] === 0) player.x -= dx;
-        if (map[Math.floor(player.y - dy)][Math.floor(player.x)] === 0) player.y -= dy;
-    }
-}
-
-// СТАРЫЙ АЛГОРИТМ (Грубый шаг 0.05, как было изначально)
-function castRayOld(px, py, rayAngle) {
-    let sin = Math.sin(rayAngle);
-    let cos = Math.cos(rayAngle);
-    let dist = 0;
-    
-    while (dist < 20) {
-        dist += 0.05; // Тот самый фиксированный шаг, дававший ступенчатость
-        let targetX = Math.floor(px + cos * dist);
-        let targetY = Math.floor(py + sin * dist);
+    // FOV 60 градусов
+    for (let x = 0; x < 640; x++) {
+        let rayAngle = (player.angle - 0.5) + (x / 640);
+        let dist = castRayDDA(player.x, player.y, rayAngle);
         
-        if (map[targetY] && map[targetY][targetX] === 1) {
-            return dist; 
-        }
+        // Исправление рыбьего глаза
+        let correctedDist = dist * Math.cos(rayAngle - player.angle);
+        let wallHeight = 400 / correctedDist;
+        
+        // Рисуем полоску стены
+        ctx.fillStyle = `rgb(0, ${255 - dist * 30}, 0)`; // Цвет зависит от расстояния
+        ctx.fillRect(x, 240 - wallHeight / 2, 1, wallHeight);
     }
-    return 20;
+    
+    player.angle += 0.01; // Вращение камеры для демонстрации
+    requestAnimationFrame(draw);
 }
 
-// НОВЫЙ АЛГОРИТМ (Точный DDA с определением сторон)
-function castRayDDA(px, py, rayAngle) {
-    let dx = Math.cos(rayAngle), dy = Math.sin(rayAngle);
+function castRayDDA(px, py, angle) {
+    let dx = Math.cos(angle), dy = Math.sin(angle);
     let mapX = Math.floor(px), mapY = Math.floor(py);
     let deltaX = Math.abs(1 / dx), deltaY = Math.abs(1 / dy);
-    let stepX = dx < 0 ? -1 : 1, stepY = dy < 0 ? -1 : 1;
+    
+    let stepX = dx < 0 ? -1 : 1;
+    let stepY = dy < 0 ? -1 : 1;
     let sideX = (dx < 0 ? px - mapX : mapX + 1 - px) * deltaX;
     let sideY = (dy < 0 ? py - mapY : mapY + 1 - py) * deltaY;
 
-    let hit = 0, side = 0; 
-    for (let i = 0; i < 30; i++) {
-        if (sideX < sideY) { sideX += deltaX; mapX += stepX; side = 0; } 
-        else { sideY += deltaY; mapY += stepY; side = 1; }
-        if (mapY < 0 || mapY >= map.length || mapX < 0 || mapX >= map[0].length) break;
-        if (map[mapY][mapX] === 1) { hit = 1; break; }
-    }
-    if (hit === 1) {
-        return { distance: (side === 0 ? sideX - deltaX : sideY - deltaY), side: side };
-    }
-    return { distance: 20, side: 0 };
-}
-
-function draw() {
-    updatePlayer(); 
-
-    // Фон
-    ctx.fillStyle = "#2a2a2a";
-    ctx.fillRect(0, 0, canvasWidth, canvasHeight / 2); 
-    ctx.fillStyle = "#555555";
-    ctx.fillRect(0, canvasHeight / 2, canvasWidth, canvasHeight / 2); 
-
-    for (let x = 0; x < canvasWidth; x++) {
-        let rayAngle = (player.angle - player.fov / 2) + (x / canvasWidth) * player.fov;
-        
-        let wallHeight = 0;
-        let colorValue = 0;
-        let isSideWall = false;
-
-        if (checkbox.checked) {
-            // === СЕЙЧАС (Новая версия с DDA и коррекцией) ===
-            let rayResult = castRayDDA(player.x, player.y, rayAngle);
-            let correctedDist = rayResult.distance * Math.cos(rayAngle - player.angle);
-            wallHeight = canvasHeight / (correctedDist + 0.0001);
-            colorValue = Math.max(0, 255 - rayResult.distance * 35);
-            isSideWall = (rayResult.side === 1);
+    for (let i = 0; i < 20; i++) {
+        if (sideX < sideY) {
+            sideX += deltaX;
+            mapX += stepX;
         } else {
-            // === КАК БЫЛО (Старая версия со скриншота, без коррекции рыбьего глаза) ===
-            let dist = castRayOld(player.x, player.y, rayAngle);
-            wallHeight = 400 / dist; // Старая формула высоты
-            colorValue = Math.max(0, 255 - dist * 30);
-            isSideWall = false; // В старой версии не было разделения сторон
+            sideY += deltaY;
+            mapY += stepY;
         }
-
-        // Отрисовка цвета
-        if (isSideWall) {
-            ctx.fillStyle = `rgb(0, ${colorValue * 0.7}, 0)`; 
-        } else {
-            ctx.fillStyle = `rgb(0, ${colorValue}, 0)`; 
-        }
-        
-        ctx.fillRect(x, (canvasHeight - wallHeight) / 2, 1, wallHeight);
+        if (map[mapY][mapX] === 1) return (sideX < sideY ? sideX - deltaX : sideY - deltaY);
     }
-    
-    requestAnimationFrame(draw);
+    return 20;
 }
 
 draw();
