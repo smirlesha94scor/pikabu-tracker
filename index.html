@@ -1,11 +1,34 @@
 <!DOCTYPE html>
-<html>
-<body style="background:#222; display:flex; justify-content:center; align-items:center; height:100vh;">
-    <canvas id="game" width="640" height="480" style="border:2px solid #555;"></canvas>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Идеальный 3D Движок (Векторный Raycasting)</title>
+    <style>
+        body {
+            background: #222;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            overflow: hidden;
+        }
+        canvas {
+            border: 2px solid #555;
+            background: #000;
+        }
+    </style>
+</head>
+<body>
+
+    <canvas id="game" width="640" height="480"></canvas>
 
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+
+const canvasWidth = canvas.width;
+const canvasHeight = canvas.height;
 
 const map = [
     [1, 1, 1, 1, 1, 1, 1, 1],
@@ -17,75 +40,133 @@ const map = [
     [1, 1, 1, 1, 1, 1, 1, 1]
 ];
 
-let player = { x: 3.5, y: 3.5, angle: 0 };
+// ВЕКТОРНЫЙ ИГРОК (как в Wolfenstein 3D)
+let player = {
+    x: 3.5,
+    y: 3.5,
+    dirX: 1.0,   // Вектор направления (куда смотрим)
+    dirY: 0.0,
+    planeX: 0.0, // Вектор плоскости экрана (перпендикулярен направлению)
+    planeY: 0.66 // Значение 0.66 задает классический FOV в ~66 градусов
+};
+
 let keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 
-// Слушаем нажатия
-window.addEventListener('keydown', e => keys[e.code] = true);
-window.addEventListener('keyup', e => keys[e.code] = false);
+window.addEventListener('keydown', e => { if(e.code in keys) keys[e.code] = true; });
+window.addEventListener('keyup', e => { if(e.code in keys) keys[e.code] = false; });
 
 function updatePlayer() {
-    let moveSpeed = 0.05;
-    let rotSpeed = 0.05;
+    let moveSpeed = 0.04;
+    let rotSpeed = 0.03;
 
-    // Поворот (Стрелки влево/вправо)
-    if (keys.ArrowLeft) player.angle -= rotSpeed;
-    if (keys.ArrowRight) player.angle += rotSpeed;
+    // Поворот с помощью матрицы вращения векторов
+    if (keys.ArrowRight) {
+        let oldDirX = player.dirX;
+        player.dirX = player.dirX * Math.cos(rotSpeed) - player.dirY * Math.sin(rotSpeed);
+        player.dirY = oldDirX * Math.sin(rotSpeed) + player.dirY * Math.cos(rotSpeed);
+        let oldPlaneX = player.planeX;
+        player.planeX = player.planeX * Math.cos(rotSpeed) - player.planeY * Math.sin(rotSpeed);
+        player.planeY = oldPlaneX * Math.sin(rotSpeed) + player.planeY * Math.cos(rotSpeed);
+    }
+    if (keys.ArrowLeft) {
+        let oldDirX = player.dirX;
+        player.dirX = player.dirX * Math.cos(-rotSpeed) - player.dirY * Math.sin(-rotSpeed);
+        player.dirY = oldDirX * Math.sin(-rotSpeed) + player.dirY * Math.cos(-rotSpeed);
+        let oldPlaneX = player.planeX;
+        player.planeX = player.planeX * Math.cos(-rotSpeed) - player.planeY * Math.sin(-rotSpeed);
+        player.planeY = oldPlaneX * Math.sin(-rotSpeed) + player.planeY * Math.cos(-rotSpeed);
+    }
 
-    // Перемещение (Стрелки вверх/вниз)
+    // Перемещение вперед/назад с коллизией
     if (keys.ArrowUp) {
-        player.x += Math.cos(player.angle) * moveSpeed;
-        player.y += Math.sin(player.angle) * moveSpeed;
+        if (map[Math.floor(player.y)][Math.floor(player.x + player.dirX * moveSpeed)] === 0) player.x += player.dirX * moveSpeed;
+        if (map[Math.floor(player.y + player.dirY * moveSpeed)][Math.floor(player.x)] === 0) player.y += player.dirY * moveSpeed;
     }
     if (keys.ArrowDown) {
-        player.x -= Math.cos(player.angle) * moveSpeed;
-        player.y -= Math.sin(player.angle) * moveSpeed;
+        if (map[Math.floor(player.y)][Math.floor(player.x - player.dirX * moveSpeed)] === 0) player.x -= player.dirX * moveSpeed;
+        if (map[Math.floor(player.y - player.dirY * moveSpeed)][Math.floor(player.x)] === 0) player.y -= player.dirY * moveSpeed;
     }
 }
 
 function draw() {
-    updatePlayer(); // Обновляем позицию перед отрисовкой
+    updatePlayer();
 
-    ctx.fillStyle = "#333";
-    ctx.fillRect(0, 0, 640, 240); // Потолок
-    ctx.fillStyle = "#666";
-    ctx.fillRect(0, 240, 640, 240); // Пол
+    // Небо и пол
+    ctx.fillStyle = "#2a2a2a";
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight / 2);
+    ctx.fillStyle = "#555555";
+    ctx.fillRect(0, canvasHeight / 2, canvasWidth, canvasHeight / 2);
 
-    for (let x = 0; x < 640; x++) {
-        let rayAngle = (player.angle - 0.5) + (x / 640);
-        let dist = castRayDDA(player.x, player.y, rayAngle);
+    // Проход по каждому столбцу экрана
+    for (let x = 0; x < canvasWidth; x++) {
+        // Вычисляем положение луча на плоскости экрана (от -1 до 1)
+        let cameraX = 2 * x / canvasWidth - 1;
         
-        let correctedDist = dist * Math.cos(rayAngle - player.angle);
-        let wallHeight = 400 / (correctedDist + 0.001); // +0.001 чтобы избежать деления на ноль
-        
-        ctx.fillStyle = `rgb(0, ${255 - dist * 30}, 0)`;
-        ctx.fillRect(x, 240 - wallHeight / 2, 1, wallHeight);
-    }
-    
-    requestAnimationFrame(draw);
-}
+        // Вектор луча
+        let rayDirX = player.dirX + player.planeX * cameraX;
+        let rayDirY = player.dirY + player.planeY * cameraX;
 
-function castRayDDA(px, py, angle) {
-    let dx = Math.cos(angle), dy = Math.sin(angle);
-    let mapX = Math.floor(px), mapY = Math.floor(py);
-    let deltaX = Math.abs(1 / dx), deltaY = Math.abs(1 / dy);
-    
-    let stepX = dx < 0 ? -1 : 1;
-    let stepY = dy < 0 ? -1 : 1;
-    let sideX = (dx < 0 ? px - mapX : mapX + 1 - px) * deltaX;
-    let sideY = (dy < 0 ? py - mapY : mapY + 1 - py) * deltaY;
+        let mapX = Math.floor(player.x);
+        let mapY = Math.floor(player.y);
 
-    for (let i = 0; i < 20; i++) {
-        if (sideX < sideY) {
-            sideX += deltaX;
-            mapX += stepX;
+        // Длина луча от одной линии сетки до следующей
+        let deltaDistX = Math.abs(1 / (rayDirX || 0.00001));
+        let deltaDistY = Math.abs(1 / (rayDirY || 0.00001));
+
+        let stepX, stepY;
+        let sideDistX, sideDistY;
+
+        if (rayDirX < 0) {
+            stepX = -1;
+            sideDistX = (player.x - mapX) * deltaDistX;
         } else {
-            sideY += deltaY;
-            mapY += stepY;
+            stepX = 1;
+            sideDistX = (mapX + 1.0 - player.x) * deltaDistX;
         }
-        if (map[mapY][mapX] === 1) return (sideX < sideY ? sideX - deltaX : sideY - deltaY);
+        if (rayDirY < 0) {
+            stepY = -1;
+            sideDistY = (player.y - mapY) * deltaDistY;
+        } else {
+            stepY = 1;
+            sideDistY = (mapY + 1.0 - player.y) * deltaDistY;
+        }
+
+        // Цикл DDA
+        let hit = 0;
+        let side = 0; // 0 - верт, 1 - гор
+        while (hit === 0) {
+            if (sideDistX < sideDistY) {
+                sideDistX += deltaDistX;
+                mapX += stepX;
+                side = 0;
+            } else {
+                sideDistY += deltaDistY;
+                mapY += stepY;
+                side = 1;
+            }
+            if (map[mapY][mapX] === 1) hit = 1;
+        }
+
+        // ВЕКТОРНОЕ ИСПРАВЛЕНИЕ: Расстояние до плоскости камеры (фишай убирается сам!)
+        let perpWallDist;
+        if (side === 0) perpWallDist = (mapX - player.x + (1 - stepX) / 2) / rayDirX;
+        else            perpWallDist = (mapY - player.y + (1 - stepY) / 2) / rayDirY;
+
+        // Высота стены
+        let wallHeight = canvasHeight / (perpWallDist + 0.0001);
+
+        // Тень
+        let colorValue = Math.max(0, 255 - perpWallDist * 35);
+        if (side === 1) {
+            ctx.fillStyle = `rgb(0, ${colorValue * 0.7}, 0)`; // Горизонтальные темнее
+        } else {
+            ctx.fillStyle = `rgb(0, ${colorValue}, 0)`;
+        }
+
+        ctx.fillRect(x, (canvasHeight - wallHeight) / 2, 1, wallHeight);
     }
-    return 20;
+
+    requestAnimationFrame(draw);
 }
 
 draw();
