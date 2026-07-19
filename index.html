@@ -2,7 +2,7 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>Сравнение Raycasting: Рыбий глаз vs Коррекция</title>
+    <title>Сравнение версий движка</title>
     <style>
         body {
             background: #222;
@@ -26,11 +26,12 @@
             position: absolute;
             top: 10px;
             left: 10px;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 0, 0, 0.75);
             color: #fff;
-            padding: 10px;
+            padding: 12px;
             border-radius: 5px;
             user-select: none;
+            font-size: 14px;
         }
         .ui-panel label {
             cursor: pointer;
@@ -45,19 +46,21 @@
     <div class="container">
         <canvas id="game" width="640" height="480"></canvas>
         
-        <!-- Панель управления с галочкой -->
         <div class="ui-panel">
             <label>
-                <input type="checkbox" id="fixFishEye" checked>
-                Включить коррекцию (как сейчас)
+                <input type="checkbox" id="engineMode" checked>
+                Новая версия (Гладкие стены и DDA)
             </label>
+            <div style="margin-top: 5px; font-size: 11px; color: #aaa;">
+                Снимите галочку, чтобы вернуть "как было" (ступенчатые блоки)
+            </div>
         </div>
     </div>
 
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
-const checkbox = document.getElementById('fixFishEye');
+const checkbox = document.getElementById('engineMode');
 
 const canvasWidth = canvas.width;
 const canvasHeight = canvas.height;
@@ -104,42 +107,42 @@ function updatePlayer() {
     }
 }
 
+// СТАРЫЙ АЛГОРИТМ (Грубый шаг 0.05, как было изначально)
+function castRayOld(px, py, rayAngle) {
+    let sin = Math.sin(rayAngle);
+    let cos = Math.cos(rayAngle);
+    let dist = 0;
+    
+    while (dist < 20) {
+        dist += 0.05; // Тот самый фиксированный шаг, дававший ступенчатость
+        let targetX = Math.floor(px + cos * dist);
+        let targetY = Math.floor(py + sin * dist);
+        
+        if (map[targetY] && map[targetY][targetX] === 1) {
+            return dist; 
+        }
+    }
+    return 20;
+}
+
+// НОВЫЙ АЛГОРИТМ (Точный DDA с определением сторон)
 function castRayDDA(px, py, rayAngle) {
-    let dx = Math.cos(rayAngle);
-    let dy = Math.sin(rayAngle);
-    
-    let mapX = Math.floor(px);
-    let mapY = Math.floor(py);
-    
-    let deltaX = Math.abs(1 / dx);
-    let deltaY = Math.abs(1 / dy);
-    
-    let stepX = dx < 0 ? -1 : 1;
-    let stepY = dy < 0 ? -1 : 1;
-    
+    let dx = Math.cos(rayAngle), dy = Math.sin(rayAngle);
+    let mapX = Math.floor(px), mapY = Math.floor(py);
+    let deltaX = Math.abs(1 / dx), deltaY = Math.abs(1 / dy);
+    let stepX = dx < 0 ? -1 : 1, stepY = dy < 0 ? -1 : 1;
     let sideX = (dx < 0 ? px - mapX : mapX + 1 - px) * deltaX;
     let sideY = (dy < 0 ? py - mapY : mapY + 1 - py) * deltaY;
 
-    let hit = 0;
-    let side = 0; 
-    
+    let hit = 0, side = 0; 
     for (let i = 0; i < 30; i++) {
-        if (sideX < sideY) {
-            sideX += deltaX;
-            mapX += stepX;
-            side = 0;
-        } else {
-            sideY += deltaY;
-            mapY += stepY;
-            side = 1;
-        }
+        if (sideX < sideY) { sideX += deltaX; mapX += stepX; side = 0; } 
+        else { sideY += deltaY; mapY += stepY; side = 1; }
         if (mapY < 0 || mapY >= map.length || mapX < 0 || mapX >= map[0].length) break;
         if (map[mapY][mapX] === 1) { hit = 1; break; }
     }
-    
     if (hit === 1) {
-        let distance = (side === 0) ? (sideX - deltaX) : (sideY - deltaY);
-        return { distance: distance, side: side };
+        return { distance: (side === 0 ? sideX - deltaX : sideY - deltaY), side: side };
     }
     return { distance: 20, side: 0 };
 }
@@ -147,6 +150,7 @@ function castRayDDA(px, py, rayAngle) {
 function draw() {
     updatePlayer(); 
 
+    // Фон
     ctx.fillStyle = "#2a2a2a";
     ctx.fillRect(0, 0, canvasWidth, canvasHeight / 2); 
     ctx.fillStyle = "#555555";
@@ -155,23 +159,27 @@ function draw() {
     for (let x = 0; x < canvasWidth; x++) {
         let rayAngle = (player.angle - player.fov / 2) + (x / canvasWidth) * player.fov;
         
-        let rayResult = castRayDDA(player.x, player.y, rayAngle);
-        let dist = rayResult.distance;
-        
-        // ========================================================
-        // ДИНАМИЧЕСКОЕ СРАВНЕНИЕ:
-        // Если галочка стоит — умножаем на косинус (исправляем).
-        // Если снята — используем «сырую» дистанцию dist (как было).
-        // ========================================================
-        let finalDist = checkbox.checked 
-            ? dist * Math.cos(rayAngle - player.angle) 
-            : dist;
-        // ========================================================
+        let wallHeight = 0;
+        let colorValue = 0;
+        let isSideWall = false;
 
-        let wallHeight = canvasHeight / (finalDist + 0.0001);
-        let colorValue = Math.max(0, 255 - dist * 35);
-        
-        if (rayResult.side === 1) {
+        if (checkbox.checked) {
+            // === СЕЙЧАС (Новая версия с DDA и коррекцией) ===
+            let rayResult = castRayDDA(player.x, player.y, rayAngle);
+            let correctedDist = rayResult.distance * Math.cos(rayAngle - player.angle);
+            wallHeight = canvasHeight / (correctedDist + 0.0001);
+            colorValue = Math.max(0, 255 - rayResult.distance * 35);
+            isSideWall = (rayResult.side === 1);
+        } else {
+            // === КАК БЫЛО (Старая версия со скриншота, без коррекции рыбьего глаза) ===
+            let dist = castRayOld(player.x, player.y, rayAngle);
+            wallHeight = 400 / dist; // Старая формула высоты
+            colorValue = Math.max(0, 255 - dist * 30);
+            isSideWall = false; // В старой версии не было разделения сторон
+        }
+
+        // Отрисовка цвета
+        if (isSideWall) {
             ctx.fillStyle = `rgb(0, ${colorValue * 0.7}, 0)`; 
         } else {
             ctx.fillStyle = `rgb(0, ${colorValue}, 0)`; 
