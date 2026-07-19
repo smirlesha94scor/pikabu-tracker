@@ -57,18 +57,18 @@
 </head>
 <body class="bg-gray-950 text-gray-100 flex flex-col items-center justify-start min-h-screen p-4 overflow-y-auto">
 
-    <header class="text-center my-4 w-full max-w-4xl">
+    <header class="text-center my-4 w-full max-w-6xl">
         <h1 class="text-2xl md:text-3xl font-bold text-green-500 tracking-wider">🛸 DRONE SURVEILLANCE ENGINE</h1>
         <p class="text-xs text-gray-400 mt-1">Интерактивный 3D-эмулятор полёта с фиксацией CCTV-камер в углах коридоров</p>
     </header>
 
-    <div class="w-full max-w-4xl flex flex-col lg:flex-row gap-6 items-center lg:items-start justify-center">
+    <div class="w-full max-w-6xl flex flex-col lg:flex-row gap-6 items-center lg:items-start justify-center">
         
         <!-- Левая колонка: 3D Холст симуляции -->
         <div class="flex flex-col items-center">
             <div class="relative border-4 border-gray-800 rounded-lg overflow-hidden shadow-2xl bg-black">
                 <!-- Главный canvas -->
-                <canvas id="game" width="640" height="480" class="block max-w-full h-auto"></canvas>
+                <canvas id="game" width="800" height="500" class="block max-w-full h-auto"></canvas>
             </div>
             <div class="text-xs text-gray-500 mt-2 text-center max-w-lg">
                 Используйте клавиши <span class="text-green-500 font-semibold">Стрелочка Вверх/Вниз</span> для разгона и <span class="text-green-500 font-semibold">Влево/Вправо</span> для крена и разворота.
@@ -458,9 +458,10 @@
         return true;
     }
 
-    function drawProceduralDrone(x, y, w, h) {
+    function drawProceduralDrone(x, y, w, h, angle = 0) {
         ctx.save();
         ctx.translate(x, y);
+        ctx.rotate(angle);
 
         // Рисуем пропеллерную крестовину дрона (ноги X)
         ctx.strokeStyle = "#4b5563";
@@ -505,10 +506,10 @@
         ctx.fill();
         ctx.stroke();
 
-        // Объектив встроенной камеры дрона
+        // Объектив встроенной камеры дрона (смотрящий ВПЕРЕД)
         ctx.fillStyle = "#020617";
         ctx.beginPath();
-        ctx.arc(0, -w * 0.05, w * 0.1, 0, Math.PI * 2);
+        ctx.arc(0, -w * 0.12, w * 0.1, 0, Math.PI * 2);
         ctx.fill();
 
         // Навигационные габаритные диоды (мигающие)
@@ -675,7 +676,11 @@
                     let drawX = scrX + spriteScreenX;
                     let drawY = scrY + (scrH / 2); 
                     
-                    drawProceduralDrone(drawX, drawY, spriteWidth, spriteHeight);
+                    // Вычисляем угол поворота дрона относительно направления камеры
+                    let droneAngle = Math.atan2(player.dirY, player.dirX);
+                    let relativeAngle = droneAngle - cam.angle;
+                    
+                    drawProceduralDrone(drawX, drawY, spriteWidth, spriteHeight, relativeAngle);
                 }
             }
         }
