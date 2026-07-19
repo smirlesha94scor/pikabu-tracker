@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<body style="background:#222; display:flex; justify-content:center; align-items:center; height:100vh;">
+    <canvas id="game" width="640" height="480" style="border:2px solid #555;"></canvas>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+const map = [
+    [1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1]
+];
+
+let player = { x: 3.5, y: 3.5, angle: 0 };
+
+function draw() {
+    ctx.fillStyle = "#333";
+    ctx.fillRect(0, 0, 640, 240); // Потолок
+    ctx.fillStyle = "#666";
+    ctx.fillRect(0, 240, 640, 240); // Пол
+
+    // FOV 60 градусов
+    for (let x = 0; x < 640; x++) {
+        let rayAngle = (player.angle - 0.5) + (x / 640);
+        let dist = castRayDDA(player.x, player.y, rayAngle);
+        
+        // Исправление рыбьего глаза
+        let correctedDist = dist * Math.cos(rayAngle - player.angle);
+        let wallHeight = 400 / correctedDist;
+        
+        // Рисуем полоску стены
+        ctx.fillStyle = `rgb(0, ${255 - dist * 30}, 0)`; // Цвет зависит от расстояния
+        ctx.fillRect(x, 240 - wallHeight / 2, 1, wallHeight);
+    }
+    
+    player.angle += 0.01; // Вращение камеры для демонстрации
+    requestAnimationFrame(draw);
+}
+
+function castRayDDA(px, py, angle) {
+    let dx = Math.cos(angle), dy = Math.sin(angle);
+    let mapX = Math.floor(px), mapY = Math.floor(py);
+    let deltaX = Math.abs(1 / dx), deltaY = Math.abs(1 / dy);
+    
+    let stepX = dx < 0 ? -1 : 1;
+    let stepY = dy < 0 ? -1 : 1;
+    let sideX = (dx < 0 ? px - mapX : mapX + 1 - px) * deltaX;
+    let sideY = (dy < 0 ? py - mapY : mapY + 1 - py) * deltaY;
+
+    for (let i = 0; i < 20; i++) {
+        if (sideX < sideY) {
+            sideX += deltaX;
+            mapX += stepX;
+        } else {
+            sideY += deltaY;
+            mapY += stepY;
+        }
+        if (map[mapY][mapX] === 1) return (sideX < sideY ? sideX - deltaX : sideY - deltaY);
+    }
+    return 20;
+}
+
+draw();
+</script>
+</body>
+</html>
