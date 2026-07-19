@@ -20,7 +20,7 @@
             background-color: #22c55e; /* Зеленый цвет для стен */
             box-shadow: inset 0 0 8px rgba(0,0,0,0.5);
         }
-        /* Камера больше не закрашивает весь квадрат, а висит в левом верхнем углу */
+        /* Камера висит в углу ячейки */
         .cell.camera-cell {
             background-color: #1f2937; /* Цвет пустого коридора */
         }
@@ -31,17 +31,22 @@
             top: 1px;
             left: 1px;
         }
-        .cell.player-cell::before {
-            content: "🛸";
-            font-size: 14px;
-            position: absolute;
-            z-index: 10;
-            animation: hoverDrone 1.5s infinite ease-in-out;
-        }
+        
         @keyframes hoverDrone {
             0%, 100% { transform: translateY(0px); }
             50% { transform: translateY(-2px); }
         }
+        
+        /* Пульсирующее свечение для дрона в редакторе, чтобы он всегда выделялся */
+        @keyframes pulseGlow {
+            0%, 100% { filter: drop-shadow(0 0 2px #22c55e); }
+            50% { filter: drop-shadow(0 0 8px #22c55e) scale(1.1); }
+        }
+        #gridDrone {
+            animation: pulseGlow 1.5s infinite;
+            display: inline-block;
+        }
+
         /* Стилизация скроллбаров */
         ::-webkit-scrollbar {
             width: 8px;
@@ -115,7 +120,7 @@
                     </div>
                     <div class="border-t border-gray-800 pt-2 mt-2">
                         <p class="text-[10px] text-gray-500 leading-relaxed">
-                            Камеры не мешают полёту дрона. Они монтируются в угол ячейки и статично следят за областью. Суб-монитор транслирует видеопоток с ближайшей к вам камеры в реальном времени.
+                            Камеры не мешают полёту дрона. Они монтируются в угол ячейки и статично следят за областью. Суб-монитор транслирует видеопоток с оптимальной камеры в реальном времени.
                         </p>
                     </div>
                 </div>
@@ -133,7 +138,7 @@
     const canvasHeight = canvas.height;
 
     // Сетка карты 10x10.
-    // 0 = Пусто, 1 = Стена, 2 = Ячейка с камерой (но проходимая для дрона!)
+    // 0 = Пусто, 1 = Стена, 2 = Ячейка с камерой (проходимая для дрона)
     let map = [
         [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
         [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
@@ -162,14 +167,13 @@
         // Плавная физика полета
         velocity: 0,      
         rotVelocity: 0,   
-        maxSpeed: 0.04,   // Лимит скорости до 30 км/ч
+        maxSpeed: 0.04,   // Лимит скорости ~30 км/ч
         maxRotSpeed: 0.04,
         accel: 0.003,     
         friction: 0.88    
     };
 
     // Список установленных камер в углах ячеек
-    // Каждая камера привязана к координате угла (например, c + 0.15, r + 0.15)
     let securityCameras = [];
 
     // Блокировка прокрутки страницы стрелочками
@@ -198,9 +202,16 @@
                 if (map[r][c] === 1) cell.classList.add('wall');
                 if (map[r][c] === 2) cell.classList.add('camera-cell');
                 
-                // Проверяем наличие игрока
+                // Проверяем наличие игрока и создаем элемент дрона
                 if (Math.floor(player.y) === r && Math.floor(player.x) === c) {
                     cell.classList.add('player-cell');
+                    const droneMarker = document.createElement('span');
+                    droneMarker.id = 'gridDrone';
+                    droneMarker.className = 'text-sm select-none z-10 transition-transform duration-100';
+                    droneMarker.innerText = '🛸';
+                    let angleDeg = Math.atan2(player.dirY, player.dirX) * 180 / Math.PI;
+                    droneMarker.style.transform = `rotate(${angleDeg}deg)`;
+                    cell.appendChild(droneMarker);
                 }
 
                 cell.addEventListener('click', () => {
@@ -216,7 +227,7 @@
                         map[r][c] = 2;
                         cell.className = 'cell w-7 h-7 cursor-pointer rounded flex items-center justify-center font-bold text-[10px] select-none camera-cell';
                         
-                        // Установка угла камеры: смотрит точно на дрон в момент установки
+                        // Установка угла камеры: намертво фиксируется в направлении дрона в момент установки
                         let camCornerX = c + 0.2; 
                         let camCornerY = r + 0.2;
                         let angleToPlayer = Math.atan2(player.y - camCornerY, player.x - camCornerX);
@@ -240,6 +251,10 @@
         const pR = Math.floor(player.y);
         const pC = Math.floor(player.x);
         
+        // Удаляем старый маркер перед обновлением
+        const oldMarker = document.getElementById('gridDrone');
+        if (oldMarker) oldMarker.remove();
+        
         for (let i = 0; i < cells.length; i++) {
             cells[i].classList.remove('player-cell');
         }
@@ -247,6 +262,15 @@
         const index = pR * mapCols + pC;
         if (cells[index]) {
             cells[index].classList.add('player-cell');
+            
+            // Создаем новый маркер дрона с текущим углом поворота
+            const droneMarker = document.createElement('span');
+            droneMarker.id = 'gridDrone';
+            droneMarker.className = 'text-sm select-none z-10 transition-transform duration-100';
+            droneMarker.innerText = '🛸';
+            let angleDeg = Math.atan2(player.dirY, player.dirX) * 180 / Math.PI;
+            droneMarker.style.transform = `rotate(${angleDeg}deg)`;
+            cells[index].appendChild(droneMarker);
         }
     }
 
@@ -319,7 +343,7 @@
         ctx.strokeStyle = "rgba(34, 197, 94, 0.4)";
         ctx.strokeRect(offset - 5, offset - 5, mapCols * size + 10, mapRows * size + 10);
 
-        // Отрисовка сетки (ячейка камеры "2" теперь рисуется пустой свободной ячейкой, а не сплошным цветом)
+        // Отрисовка сетки
         for (let r = 0; r < mapRows; r++) {
             for (let c = 0; c < mapCols; c++) {
                 if (map[r][c] === 1) {
@@ -331,10 +355,10 @@
             }
         }
 
-        // Находим ближайшую к дрону камеру для подсветки активной трансляции
-        let activeCamIndex = getClosestCameraIndex();
+        // Находим активную камеру на основе угла обзора и прямой видимости
+        let activeCamIndex = getActiveCameraIndex();
 
-        // Отображаем камеры строго в углах ячеек
+        // Отображаем камеры в углах ячеек
         securityCameras.forEach((cam, index) => {
             const cX = offset + cam.x * size;
             const cY = offset + cam.y * size;
@@ -348,16 +372,23 @@
             ctx.lineTo(cX + Math.cos(cam.angle) * 15, cY + Math.sin(cam.angle) * 15);
             ctx.stroke();
 
-            // Точка камеры (рисуется со смещением в угол)
+            // Точка камеры
             ctx.fillStyle = isActive ? "#eab308" : "#3b82f6";
             ctx.beginPath();
             ctx.arc(cX, cY, 3, 0, Math.PI * 2);
             ctx.fill();
         });
 
-        // Отрисовка игрока на мини-карте
+        // Отрисовка игрока на мини-карте (всегда на переднем плане)
         const pX = offset + player.x * size;
         const pY = offset + player.y * size;
+
+        // Пульсирующий неоновый ореол вокруг дрона на миникарте
+        let pulseRadius = 5 + Math.sin(Date.now() * 0.01) * 2.5;
+        ctx.fillStyle = "rgba(34, 197, 94, 0.35)";
+        ctx.beginPath();
+        ctx.arc(pX, pY, pulseRadius, 0, Math.PI * 2);
+        ctx.fill();
 
         // Вектор направления движения дрона
         ctx.strokeStyle = "#ef4444";
@@ -367,11 +398,33 @@
         ctx.lineTo(pX + player.dirX * 10, pY + player.dirY * 10);
         ctx.stroke();
 
-        // Точка дрона
-        ctx.fillStyle = "#ffffff";
+        // Отрисовка дрона на мини-карте в виде ориентированного квадрокоптера
+        ctx.save();
+        ctx.translate(pX, pY);
+        let angle = Math.atan2(player.dirY, player.dirX);
+        ctx.rotate(angle);
+        
+        // Лучи пропеллеров (крестовина)
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1;
         ctx.beginPath();
-        ctx.arc(pX, pY, 3.5, 0, Math.PI * 2);
+        ctx.moveTo(-3, -3); ctx.lineTo(3, 3);
+        ctx.moveTo(3, -3); ctx.lineTo(-3, 3);
+        ctx.stroke();
+        
+        // Корпус дрона
+        ctx.fillStyle = "#10b981";
+        ctx.beginPath();
+        ctx.arc(0, 0, 2.2, 0, Math.PI * 2);
         ctx.fill();
+        
+        // Объектив его фронтальной камеры
+        ctx.fillStyle = "#000000";
+        ctx.beginPath();
+        ctx.arc(1.6, 0, 0.8, 0, Math.PI * 2);
+        ctx.fill();
+        
+        ctx.restore();
     }
 
     function drawHUD() {
@@ -418,7 +471,7 @@
         ctx.fillRect(center + offset - 3, hudY + 74, 6, 4);
     }
 
-    // Helper: Вычисляем индекс ближайшей камеры к дрону
+    // Вычисляем индекс абсолютно ближайшей камеры
     function getClosestCameraIndex() {
         if (securityCameras.length === 0) return -1;
         let closestDist = Infinity;
@@ -435,7 +488,41 @@
         return closestIdx;
     }
 
-    // Helper: Проверка линии прямой видимости (без стен) между камерой и дроном
+    // Умный выбор камеры: Сначала ищет камеру с прямой видимостью, если таких нет - выбирает ближайшую
+    function getActiveCameraIndex() {
+        if (securityCameras.length === 0) return -1;
+        
+        let bestIdx = -1;
+        let closestDistWithLOS = Infinity;
+        
+        for (let i = 0; i < securityCameras.length; i++) {
+            let cam = securityCameras[i];
+            let hasLOS = checkLineOfSight(cam.x, cam.y, player.x, player.y);
+            if (hasLOS) {
+                // Проверяем, находится ли дрон в конусе обзора камеры (угол обзора ~ FOV 0.66)
+                let dx = player.x - cam.x;
+                let dy = player.y - cam.y;
+                let angleToPlayer = Math.atan2(dy, dx);
+                let diff = Math.atan2(Math.sin(angleToPlayer - cam.angle), Math.cos(angleToPlayer - cam.angle));
+                
+                if (Math.abs(diff) < 0.8) { // В пределах видимости объектива
+                    let dist = dx * dx + dy * dy;
+                    if (dist < closestDistWithLOS) {
+                        closestDistWithLOS = dist;
+                        bestIdx = i;
+                    }
+                }
+            }
+        }
+        
+        if (bestIdx !== -1) {
+            return bestIdx; // Возвращаем лучшую наблюдающую камеру
+        }
+        
+        return getClosestCameraIndex(); // Возврат к классическому варианту ближайшей точки
+    }
+
+    // Проверка линии прямой видимости (без стен) между камерой и дроном
     function checkLineOfSight(x1, y1, x2, y2) {
         let dx = x2 - x1;
         let dy = y2 - y1;
@@ -473,6 +560,20 @@
         ctx.lineTo(-w/2, h/2);
         ctx.stroke();
 
+        // Передние ходовые огни (зеленые) на передних лучах
+        ctx.fillStyle = "#22c55e";
+        ctx.beginPath();
+        ctx.arc(-w/2, -h/2, w * 0.1, 0, Math.PI * 2);
+        ctx.arc(w/2, -h/2, w * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Задние габаритные огни (красные) на задних лучах
+        ctx.fillStyle = "#ef4444";
+        ctx.beginPath();
+        ctx.arc(-w/2, h/2, w * 0.1, 0, Math.PI * 2);
+        ctx.arc(w/2, h/2, w * 0.1, 0, Math.PI * 2);
+        ctx.fill();
+
         // Четыре винта (пропеллера) на концах
         const rSize = w * 0.22;
         ctx.strokeStyle = "rgba(255, 255, 255, 0.4)";
@@ -484,15 +585,17 @@
         ctx.ellipse(-w/2, -h/2, rSize, rSize * 0.3, angleSpeed, 0, Math.PI * 2);
         ctx.stroke();
 
-        // ...пропеллеры...
+        // Верхний правый
         ctx.beginPath();
         ctx.ellipse(w/2, -h/2, rSize, rSize * 0.3, -angleSpeed, 0, Math.PI * 2);
         ctx.stroke();
 
+        // Нижний левый
         ctx.beginPath();
         ctx.ellipse(-w/2, h/2, rSize, rSize * 0.3, -angleSpeed * 1.2, 0, Math.PI * 2);
         ctx.stroke();
 
+        // Нижний правый
         ctx.beginPath();
         ctx.ellipse(w/2, h/2, rSize, rSize * 0.3, angleSpeed * 1.2, 0, Math.PI * 2);
         ctx.stroke();
@@ -551,7 +654,7 @@
         ctx.arc(-size * 0.2, -size * 0.05, size * 0.08, 0, Math.PI * 2);
         ctx.fill();
 
-        // Объектив объектива
+        // Объектив
         ctx.fillStyle = "#090d16";
         ctx.beginPath();
         ctx.arc(size * 0.3, 0, size * 0.12, 0, Math.PI * 2);
@@ -561,7 +664,7 @@
     }
 
     function drawCCTVSubScreen() {
-        let activeIdx = getClosestCameraIndex();
+        let activeIdx = getActiveCameraIndex();
 
         // Координаты и габариты экрана CCTV монитора
         const scrW = 160;
@@ -594,7 +697,7 @@
         // Извлекаем выбранную камеру
         let cam = securityCameras[activeIdx];
 
-        // Сохраняем контекст рисования перед наложением маски обрезки
+        // Сохраняем контекст рисования перед наложением маски обрезки (ОБРЕЗКА ПРЕДОТВРАЩАЕТ ВЫЛЕЗ КАРТИНКИ)
         ctx.save();
         ctx.beginPath();
         ctx.rect(scrX, scrY, scrW, scrH);
@@ -608,14 +711,14 @@
         let camDirX = Math.cos(cam.angle);
         let camDirY = Math.sin(cam.angle);
         
-        // Вектор проекционной плоскости камеры (FOV ~ 60)
-        let camPlaneX = -Math.sin(cam.angle) * 0.55;
-        let camPlaneY = Math.cos(cam.angle) * 0.55;
+        // Вектор проекционной плоскости камеры синхронизирован с FOV дрона (0.66)
+        let camPlaneX = -Math.sin(cam.angle) * 0.66;
+        let camPlaneY = Math.cos(cam.angle) * 0.66;
 
         // Храним z-буфер глубин для отсечения стен на CCTV-экране
         let wallDepths = new Float32Array(scrW);
 
-        // Скан-рейкастинг для дисплея CCTV (здесь стены '1' блокируют обзор, а ячейки '2' прозрачны!)
+        // Скан-рейкастинг для дисплея CCTV (здесь стены '1' блокируют обзор)
         for (let x = 0; x < scrW; x++) {
             let cameraX = 2 * x / scrW - 1;
             let rayDirX = camDirX + camPlaneX * cameraX;
@@ -637,7 +740,6 @@
                 if (sideDistX < sideDistY) { sideDistX += deltaDistX; mapX += stepX; side = 0; } 
                 else { sideDistY += deltaDistY; mapY += stepY; side = 1; }
                 if (mapY < 0 || mapY >= mapRows || mapX < 0 || mapX >= mapCols) break;
-                // Только стены (1) преграждают луч обзора. Ячейки с камерами (2) проходимы и не загораживают видимость
                 if (map[mapY][mapX] === 1) { hit = 1; }
             }
 
@@ -670,8 +772,10 @@
                 
                 // Сверяемся с z-буфером, чтобы дрон не просвечивал сквозь стены
                 if (spriteScreenX >= 0 && spriteScreenX < scrW && transformY < wallDepths[spriteScreenX]) {
-                    let spriteHeight = Math.abs(Math.floor(scrH / transformY));
-                    let spriteWidth = Math.abs(Math.floor(scrH / transformY));
+                    // Камеры видят с любого расстояния: ограничиваем минимальный размер спрайта дрона (Math.max(16, ...))
+                    // Благодаря этому он виден даже с противоположного конца длинного коридора!
+                    let spriteHeight = Math.max(16, Math.abs(Math.floor(scrH / transformY)));
+                    let spriteWidth = Math.max(16, Math.abs(Math.floor(scrH / transformY)));
                     
                     let drawX = scrX + spriteScreenX;
                     let drawY = scrY + (scrH / 2); 
@@ -763,7 +867,6 @@
                 if (mapY < 0 || mapY >= mapRows || mapX < 0 || mapX >= mapCols) {
                     break;
                 }
-                // Только стены (1) являются непроходимыми сплошными препятствиями в 3D
                 if (map[mapY][mapX] === 1) {
                     hit = 1;
                 }
@@ -787,8 +890,8 @@
             ctx.fillRect(x, (canvasHeight - wallHeight) / 2, 1, wallHeight);
         }
 
-        // 3. Спрайтовый 3D-рендер висящих камер в углах (камеры не занимают блоки, а висят в реальном 3D!)
-        let activeCamIndex = getClosestCameraIndex();
+        // 3. Спрайтовый 3D-рендер висящих камер в углах (камеры висят в реальном 3D!)
+        let activeCamIndex = getActiveCameraIndex();
         
         // Сортируем камеры по удаленности от дрона (Back-to-Front алгоритм художника)
         let sortedCams = securityCameras.map((cam, idx) => {
