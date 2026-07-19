@@ -123,7 +123,7 @@ let player = {
     // Новые параметры для дрона:
     velocity: 0,      // Текущая скорость вперед/назад
     rotVelocity: 0,   // Текущая скорость поворота
-    maxSpeed: 0.06,   // Максимальная скорость движения
+    maxSpeed: 0.04,   // Максимальная скорость движения
     maxRotSpeed: 0.04,// Максимальная скорость поворота
     accel: 0.004,     // Ускорение (тяга двигателей дрона)
     friction: 0.85    // Трение/сопротивление воздуха (1 - нет трения, 0 - мгновенный стоп)
@@ -205,7 +205,7 @@ function drawHUD() {
     ctx.fillStyle = "#aaa";
     ctx.font = "10px monospace";
     // Переводим внутреннюю скорость в условные км/ч для красоты
-    let speedKmH = Math.round(speedPercent * 45); 
+    let speedKmH = Math.round(speedPercent * 30); 
     ctx.fillText(`SPEED: ${speedKmH} km/h`, hudX + 10, hudY + 42);
 
     // Шкала скорости (Рамка)
