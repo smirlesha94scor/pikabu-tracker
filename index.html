@@ -96,10 +96,11 @@ const editorGrid = document.getElementById('mapEditor');
 const canvasWidth = canvas.width;
 const canvasHeight = canvas.height;
 
-// Переменные для расчета FPS
+// Переменные для расчета FPS и Delta Time
 let fps = 0;
 let frameCount = 0;
-let lastTime = performance.now();
+let lastFpsUpdate = performance.now();
+let lastFrameTime = performance.now();
 
 // Карта 8x7
 let map = [
@@ -137,15 +138,12 @@ function createEditor() {
             cell.classList.add('cell');
             if (map[r][c] === 1) cell.classList.add('wall');
             
-            // Отображаем иконку игрока на сетке редактора
             if (Math.floor(player.y) === r && Math.floor(player.x) === c) {
                 cell.classList.add('player-cell');
             }
 
-            // Переключение стены по клику
             cell.addEventListener('click', () => {
                 if (Math.floor(player.y) === r && Math.floor(player.x) === c) return;
-                
                 map[r][c] = map[r][c] === 1 ? 0 : 1;
                 cell.classList.toggle('wall');
             });
@@ -155,7 +153,6 @@ function createEditor() {
     }
 }
 
-// Обновление положения маркера игрока в редакторе
 function updateEditorPlayerMarker() {
     const cells = editorGrid.children;
     const pR = Math.floor(player.y);
@@ -171,9 +168,10 @@ function updateEditorPlayerMarker() {
     }
 }
 
-function updatePlayer() {
-    let moveSpeed = 0.04;
-    let rotSpeed = 0.03;
+// Плавное движение с учетом dt (Delta Time)
+function updatePlayer(dt) {
+    let moveSpeed = 2.5 * dt; // Скорость завязана на время
+    let rotSpeed = 2.0 * dt;
 
     if (keys.ArrowRight) {
         let oldDirX = player.dirX;
@@ -211,7 +209,6 @@ function drawMinimap() {
     const size = 16;
     const offset = 15;
     
-    // Фон мини-карты
     ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
     ctx.fillRect(offset - 5, offset - 5, mapCols * size + 10, mapRows * size + 10);
 
@@ -229,7 +226,6 @@ function drawMinimap() {
     const pX = offset + player.x * size;
     const pY = offset + player.y * size;
 
-    // Вектор взгляда
     ctx.strokeStyle = "#ff3333";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -237,14 +233,12 @@ function drawMinimap() {
     ctx.lineTo(pX + player.dirX * (size * 0.8), pY + player.dirY * (size * 0.8));
     ctx.stroke();
 
-    // Точка игрока
     ctx.fillStyle = "#ffffff";
     ctx.beginPath();
     ctx.arc(pX, pY, 4, 0, Math.PI * 2);
     ctx.fill();
 }
 
-// --- ОТРИСОВКА ИНДИКАТОРА FPS ---
 function drawFPS() {
     ctx.fillStyle = "#00ff00";
     ctx.font = "bold 14px monospace";
@@ -252,15 +246,20 @@ function drawFPS() {
 }
 
 function draw(now) {
-    // Подсчет FPS
+    // Вычисление Delta Time (в секундах)
+    let dt = (now - lastFrameTime) / 1000;
+    if (dt > 0.1) dt = 0.1; // Ограничение скачков
+    lastFrameTime = now;
+
+    // Подсчет FPS каждые 500мс
     frameCount++;
-    if (now - lastTime >= 500) {
-        fps = Math.round((frameCount * 1000) / (now - lastTime));
+    if (now - lastFpsUpdate >= 500) {
+        fps = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
         frameCount = 0;
-        lastTime = now;
+        lastFpsUpdate = now;
     }
 
-    updatePlayer();
+    updatePlayer(dt);
 
     // Рендер 3D пространства (Небо / Пол)
     ctx.fillStyle = "#2a2a2a";
@@ -268,8 +267,10 @@ function draw(now) {
     ctx.fillStyle = "#555555";
     ctx.fillRect(0, canvasHeight / 2, canvasWidth, canvasHeight / 2);
 
-    // Векторный Raycasting
-    for (let x = 0; x < canvasWidth; x++) {
+    // ОПТИМИЗИРОВАННЫЙ RAYCASTING (шаг полосы = 2px)
+    const rayStep = 2; 
+
+    for (let x = 0; x < canvasWidth; x += rayStep) {
         let cameraX = 2 * x / canvasWidth - 1;
         let rayDirX = player.dirX + player.planeX * cameraX;
         let rayDirY = player.dirY + player.planeY * cameraX;
@@ -328,10 +329,10 @@ function draw(now) {
             ctx.fillStyle = `rgb(0, ${colorValue}, 0)`;
         }
 
-        ctx.fillRect(x, (canvasHeight - wallHeight) / 2, 1, wallHeight);
+        // Рисуем полосу шириной rayStep
+        ctx.fillRect(x, (canvasHeight - wallHeight) / 2, rayStep, wallHeight);
     }
 
-    // Отрисовка мини-карты и FPS
     drawMinimap();
     drawFPS();
 
