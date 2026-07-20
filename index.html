@@ -62,7 +62,7 @@
             3D DRONE SIMULATOR & INTERACTIVE CCTV SYSTEM
         </h1>
         <p class="text-gray-400 text-sm mt-2">
-            Управляйте полетом дрона, стройте стены, расставляйте камеры наблюдения в углах и настраивайте их углы обзора в реальном времени.
+            Управляйте полетом дрона, стройте стены, расставляйте камеры наблюдения в углах и настраивайте их направления в реальном времени.
         </p>
     </header>
 
@@ -120,7 +120,7 @@
                     <span id="posVal" class="text-lg font-bold text-cyan-400 mono">X: 3.5, Y: 3.5</span>
                 </div>
                 <div>
-                    <span class="text-xs text-gray-400 block uppercase">Гироскоп</span>
+                    <span class="text-xs text-gray-400 block uppercase">Статус гироскопа</span>
                     <span class="text-lg font-bold text-indigo-400 mono">STABLE</span>
                 </div>
             </div>
@@ -232,8 +232,7 @@ let map = [
 const mapRows = map.length;
 const mapCols = map[0].length;
 
-// Список расставленных пользователем камер
-// Угол хранится в радианах
+// Список расставленных пользователем камер (Угол хранится в радианах)
 let cameras = [
     { x: 1.5, y: 1.5, angle: 0.78, active: true }, // Камера по умолчанию в углу
 ];
@@ -253,7 +252,7 @@ let keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: fal
 window.addEventListener('keydown', e => { 
     if (e.code in keys) {
         keys[e.code] = true; 
-        e.preventDefault(); // Блокировка прокрутки
+        e.preventDefault(); // Блокировка прокрутки страницы
     }
 });
 window.addEventListener('keyup', e => { 
@@ -299,18 +298,19 @@ toolWallBtn.addEventListener('click', () => { currentTool = 'wall'; updateToolUI
 toolCameraBtn.addEventListener('click', () => { currentTool = 'camera'; updateToolUI(); });
 toolEraserBtn.addEventListener('click', () => { currentTool = 'eraser'; updateToolUI(); });
 
-// Инициализация сетки редактора
 function createEditor() {
     editorGrid.innerHTML = '';
     for (let r = 0; r < mapRows; r++) {
         for (let c = 0; c < mapCols; c++) {
             const cell = document.createElement('div');
-            cell.className = "cell w-10 h-10 bg-gray-800 border border-gray-700 cursor-pointer transition flex items-center justify-center rounded select-none text-xs hover:border-gray-500";
             
-            // Отрисовка исходного лабиринта
+            // Фикс багов отображения: определяем строго раздельные цвета для стен и свободных ячеек
+            let bgClass = "bg-gray-800 border-gray-700 text-gray-500";
             if (map[r][c] === 1) {
-                cell.className += " bg-emerald-600 border-emerald-500 shadow-inner";
+                bgClass = "bg-emerald-600 border-emerald-500 text-white shadow-inner shadow-black/40";
             }
+            
+            cell.className = `cell w-10 h-10 ${bgClass} cursor-pointer transition flex items-center justify-center rounded select-none text-xs hover:border-gray-500`;
             
             // Если в этой клетке стоит камера
             const cam = cameras.find(cam => Math.floor(cam.y) === r && Math.floor(cam.x) === c);
@@ -378,7 +378,6 @@ function createEditor() {
     }
 }
 
-// Поведение UI панели управления параметрами камеры
 const configPanel = document.getElementById('cameraConfigPanel');
 const selectedCamIdSpan = document.getElementById('selectedCamId');
 const angleSlider = document.getElementById('cameraAngleSlider');
@@ -401,7 +400,6 @@ function updateCameraConfigPanel() {
     angleValueDisplay.innerText = `${angleSlider.value}°`;
 }
 
-// Реакция на вращение ползунка угла камеры
 angleSlider.addEventListener('input', () => {
     if (selectedCameraIndex !== null && cameras[selectedCameraIndex]) {
         const rad = (parseInt(angleSlider.value) * Math.PI) / 180;
@@ -544,8 +542,7 @@ function drawMinimap() {
 }
 
 function drawFPS() {
-    // В соответствии с вашим требованием: делаем FPS табло черным цветом
-    // Для этого рисуем сплошную светлую зеленую контрастную рамку и выводим глубокий черный текст.
+    // Делаем плашку FPS зеленой с глубоким черным контрастным текстом
     ctx.fillStyle = "#10b981";
     ctx.fillRect(15, 435, 75, 25);
     ctx.strokeStyle = "#ffffff";
@@ -557,7 +554,6 @@ function drawFPS() {
     ctx.fillText(`FPS: ${fps}`, 22, 452);
 }
 
-// Функция 3D-рендеринга с ракурса выбранной камеры (CCTV Feed)
 function renderCCTV() {
     const activeCam = cameras[activeCameraIndex];
     if (!activeCam) {
@@ -585,14 +581,11 @@ function renderCCTV() {
     cctvCtx.fillStyle = "#050a07"; // Почти темный пол
     cctvCtx.fillRect(0, h / 2, w, h / 2);
 
-    // Логика направления камеры
     const camDirX = Math.cos(activeCam.angle);
     const camDirY = Math.sin(activeCam.angle);
-    // Вектор перпендикуляра обзора
     const camPlaneX = -camDirY * 0.66;
     const camPlaneY = camDirX * 0.66;
 
-    // Оптимизированный рендеринг камеры (шаг = 3 пикселя для идеальной плавности)
     const cctvStep = 3;
     const depthBuffer = new Array(w).fill(Infinity);
 
@@ -651,7 +644,6 @@ function renderCCTV() {
         let wallHeight = h / (perpWallDist + 0.0001);
         let colorValue = Math.max(0, 180 - perpWallDist * 25);
 
-        // Черно-зеленая ночная палитра для монитора
         if (side === 1) {
             cctvCtx.fillStyle = `rgb(0, ${colorValue * 0.55}, 0)`; 
         } else {
@@ -662,25 +654,24 @@ function renderCCTV() {
     }
 
     // Рендер дрона в 3D пространстве монитора камер
-    // 1. Проверяем попадание в зону видимости
     const dx = player.x - activeCam.x;
     const dy = player.y - activeCam.y;
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     // Направление на игрока относительно направления камеры
     const angleToPlayer = Math.atan2(dy, dx);
-    let relativeAngle = angleToPlayer - activeCam.angle;
+    let relativeAngleToCam = angleToPlayer - activeCam.angle;
 
     // Нормализация угла [-PI, PI]
-    while (relativeAngle < -Math.PI) relativeAngle += Math.PI * 2;
-    while (relativeAngle > Math.PI) relativeAngle -= Math.PI * 2;
+    while (relativeAngleToCam < -Math.PI) relativeAngleToCam += Math.PI * 2;
+    while (relativeAngleToCam > Math.PI) relativeAngleToCam -= Math.PI * 2;
 
     const fov = 60 * Math.PI / 180;
 
     // Если дрон в пределах 60-градусного объектива камеры
-    if (Math.abs(relativeAngle) < fov / 2) {
+    if (Math.abs(relativeAngleToCam) < fov / 2) {
         
-        // 2. Тест Line of Sight (проверяем, не скрыт ли дрон за стеной)
+        // Тест Line of Sight (проверяем прямую видимость)
         let visible = true;
         let testX = activeCam.x;
         let testY = activeCam.y;
@@ -698,46 +689,113 @@ function renderCCTV() {
         }
 
         if (visible) {
-            // Вычисляем горизонтальную координату на экране CCTV
-            const projX = (w / 2) + Math.tan(relativeAngle) / Math.tan(fov / 2) * (w / 2);
+            const projX = (w / 2) + Math.tan(relativeAngleToCam) / Math.tan(fov / 2) * (w / 2);
             
-            // Если координата попадает на экран
             if (projX >= 0 && projX < w && dist < depthBuffer[Math.floor(projX)]) {
-                // Размер дрона (Масштаб от расстояния, но не менее 16px)
-                const size = Math.max(16, h / (dist + 0.0001) * 0.4);
+                const size = Math.max(20, h / (dist + 0.0001) * 0.4);
                 
                 cctvCtx.save();
                 cctvCtx.translate(projX, h / 2);
 
-                // Относительный угол направления дрона
+                // РЕШЕНИЕ ПРОБЛЕМЫ ВРАЩЕНИЯ: 3D-сортировка по оси Y (Yaw-вращение вокруг своей оси)
                 const droneHeading = Math.atan2(player.dirY, player.dirX);
-                const droneRelativeRotation = droneHeading - activeCam.angle;
-                cctvCtx.rotate(droneRelativeRotation);
+                // Угол направления дрона относительно луча зрения камеры
+                const alpha = droneHeading - activeCam.angle; 
+                
+                const R = size / 2;
+                const R_arm = R * 1.1;
+                const parts = [];
 
-                // Рисуем спрайт футуристичного дрона 🛸
-                cctvCtx.fillStyle = "#22d3ee"; // Неоновый корпус
-                cctvCtx.strokeStyle = "#ffffff";
-                cctvCtx.lineWidth = 1.5;
+                // 1. Центральное тело дрона (в центре локальной системы координат)
+                parts.push({
+                    z: 0,
+                    draw: () => {
+                        cctvCtx.fillStyle = "#0e7490"; // Глубокий бирюзовый корпус
+                        cctvCtx.strokeStyle = "#22d3ee"; // Неоновые линии
+                        cctvCtx.lineWidth = 1.5;
+                        cctvCtx.beginPath();
+                        cctvCtx.ellipse(0, 0, R, R * 0.5, 0, 0, Math.PI * 2);
+                        cctvCtx.fill();
+                        cctvCtx.stroke();
+                    }
+                });
 
-                // Основное блюдце
-                cctvCtx.beginPath();
-                cctvCtx.ellipse(0, 0, size / 2, size / 4, 0, 0, Math.PI * 2);
-                cctvCtx.fill();
-                cctvCtx.stroke();
+                // 2. Фронтальный объектив / Объектив камеры (Всегда спереди дрона, т.е. по локальному углу 0)
+                // Его положение зависит от горизонтального вращения дрона вокруг своей оси (alpha)
+                parts.push({
+                    z: Math.sin(alpha) * (R * 0.7), // Глубина для отрисовки
+                    draw: () => {
+                        const eyeX = Math.cos(alpha) * (R * 0.75);
+                        const eyeY = 0;
+                        // Отрисовываем только если объектив направлен в сторону камеры (не скрыт сзади корпуса)
+                        if (Math.sin(alpha) > -0.2) {
+                            cctvCtx.fillStyle = "#ef4444"; // Красный диод записи/объектив
+                            cctvCtx.beginPath();
+                            cctvCtx.arc(eyeX, eyeY, R * 0.22, 0, Math.PI * 2);
+                            cctvCtx.fill();
+                            cctvCtx.strokeStyle = "#ffffff";
+                            cctvCtx.lineWidth = 1;
+                            cctvCtx.stroke();
 
-                // Купол
-                cctvCtx.fillStyle = "#06b6d4";
-                cctvCtx.beginPath();
-                cctvCtx.arc(0, -size / 8, size / 5, Math.PI, 0);
-                cctvCtx.fill();
-                cctvCtx.stroke();
+                            // Блик линзы
+                            cctvCtx.fillStyle = "#ffffff";
+                            cctvCtx.beginPath();
+                            cctvCtx.arc(eyeX - R * 0.05, eyeY - R * 0.05, R * 0.07, 0, Math.PI * 2);
+                            cctvCtx.fill();
+                        }
+                    }
+                });
 
-                // Огни по бокам
-                cctvCtx.fillStyle = "#ef4444";
-                cctvCtx.beginPath();
-                cctvCtx.arc(-size / 2.5, 0, 2.5, 0, Math.PI * 2);
-                cctvCtx.arc(size / 2.5, 0, 2.5, 0, Math.PI * 2);
-                cctvCtx.fill();
+                // 3. Четыре лопасти / Мотора в компоновке квадрокоптера
+                const motorAngles = [
+                    { angle: Math.PI / 4, name: 'FR' },   // Передняя правая лопасть
+                    { angle: (3 * Math.PI) / 4, name: 'BR' }, // Задняя правая лопасть
+                    { angle: -(3 * Math.PI) / 4, name: 'BL' }, // Задняя левая лопасть
+                    { angle: -Math.PI / 4, name: 'FL' }   // Передняя левая лопасть
+                ];
+
+                motorAngles.forEach(m => {
+                    // Рассчитываем горизонтальное положение лопастей с учетом истинного вращения дрона
+                    const motorAlpha = alpha + m.angle;
+                    const motorX = Math.cos(motorAlpha) * R_arm;
+                    
+                    // Небольшой 3D-наклон: задние пропеллеры рисуются чуть выше, передние — чуть ниже
+                    const motorY = -R * 0.15 + Math.sin(motorAlpha) * (R * 0.12);
+                    const motorZ = Math.sin(motorAlpha) * R_arm; // Глубина для сортировки
+
+                    parts.push({
+                        z: motorZ,
+                        draw: () => {
+                            // Опорная ножка мотора
+                            cctvCtx.strokeStyle = "#334155";
+                            cctvCtx.lineWidth = 3;
+                            cctvCtx.beginPath();
+                            cctvCtx.moveTo(0, 0);
+                            cctvCtx.lineTo(motorX, motorY);
+                            cctvCtx.stroke();
+
+                            // Сердечник мотора
+                            cctvCtx.fillStyle = "#1e293b";
+                            cctvCtx.beginPath();
+                            cctvCtx.arc(motorX, motorY, R * 0.14, 0, Math.PI * 2);
+                            cctvCtx.fill();
+
+                            // Вращающийся пропеллер (размах анимирован через синусоиду времени)
+                            const propWidth = R * 0.65 * Math.abs(Math.sin(performance.now() * 0.04));
+                            cctvCtx.strokeStyle = "rgba(224, 242, 254, 0.7)";
+                            cctvCtx.lineWidth = 1.2;
+                            cctvCtx.beginPath();
+                            cctvCtx.ellipse(motorX, motorY - 2, propWidth, R * 0.08, 0, 0, Math.PI * 2);
+                            cctvCtx.stroke();
+                        }
+                    });
+                });
+
+                // Сортируем все элементы по глубине Z (от дальних к ближним)
+                parts.sort((a, b) => a.z - b.z);
+
+                // Отрисовываем отсортированные слои
+                parts.forEach(p => p.draw());
 
                 cctvCtx.restore();
             }
@@ -746,7 +804,6 @@ function renderCCTV() {
 }
 
 function draw(now) {
-    // Расчет дельты времени
     let dt = (now - lastFrameTime) / 1000;
     if (dt > 0.1) dt = 0.1; // Фильтрация фризов
     lastFrameTime = now;
@@ -767,8 +824,7 @@ function draw(now) {
     ctx.fillStyle = "#0f172a"; // Темно-серый асфальт
     ctx.fillRect(0, canvasHeight / 2, canvasWidth, canvasHeight / 2);
 
-    // Основной Raycasting шаг рендера = 2 пикселя
-    const rayStep = 2; 
+    const rayStep = 2; // Шаг рендеринга для 60 FPS
 
     for (let x = 0; x < canvasWidth; x += rayStep) {
         let cameraX = 2 * x / canvasWidth - 1;
@@ -825,9 +881,9 @@ function draw(now) {
 
         // Отрисовка стен с мягким затуханием (глубокий бирюзово-зеленый оттенок)
         if (side === 1) {
-            ctx.fillStyle = `rgb(10, ${colorValue * 0.45}, ${colorValue * 0.4})`; 
+            ctx.fillStyle = `rgb(10, ${colorValue * 0.45}, ${colorValue * 0.45})`; 
         } else {
-            ctx.fillStyle = `rgb(16, ${colorValue * 0.65}, ${colorValue * 0.55})`;
+            ctx.fillStyle = `rgb(16, ${colorValue * 0.65}, ${colorValue * 0.65})`;
         }
 
         ctx.fillRect(x, (canvasHeight - wallHeight) / 2, rayStep, wallHeight);
