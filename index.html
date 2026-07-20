@@ -1,13 +1,104 @@
 <!DOCTYPE html>
-<html>
-<body style="background:#222; display:flex; justify-content:center; align-items:center; height:100vh;">
-    <canvas id="game" width="640" height="480" style="border:2px solid #555;"></canvas>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>3D Движок + Редактор карт + Мини-карта</title>
+    <style>
+        body {
+            background: #222;
+            color: #fff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+        .game-container {
+            position: relative;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        }
+        canvas {
+            border: 2px solid #555;
+            background: #000;
+            display: block;
+        }
+        .editor-container {
+            margin-top: 20px;
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #555;
+            text-align: center;
+        }
+        .editor-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 40px);
+            grid-gap: 2px;
+            margin-top: 10px;
+            background: #222;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .cell {
+            width: 40px;
+            height: 40px;
+            background: #444;
+            border: 1px solid #555;
+            cursor: pointer;
+            transition: background 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            user-select: none;
+        }
+        .cell.wall {
+            background: #00ff00;
+            border-color: #00cc00;
+        }
+        .cell.player-cell {
+            position: relative;
+        }
+        .cell.player-cell::after {
+            content: "🤠";
+            font-size: 18px;
+        }
+        .instructions {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #aaa;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- 3D Экран игры -->
+    <div class="game-container">
+        <canvas id="game" width="640" height="480"></canvas>
+    </div>
+
+    <!-- Редактор карты под экраном -->
+    <div class="editor-container">
+        <h3>🛠️ Интерактивный редактор карты</h3>
+        <p style="margin: 0; font-size: 14px; color: #ccc;">Кликайте по ячейкам, чтобы строить или убирать стены в реальном времени</p>
+        <div class="editor-grid" id="mapEditor"></div>
+        <div class="instructions">Управление: <b>Стрелочки</b> — движение и поворот камеры</div>
+    </div>
 
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+const editorGrid = document.getElementById('mapEditor');
 
-const map = [
+const canvasWidth = canvas.width;
+const canvasHeight = canvas.height;
+
+// Карта 8x7 (как в ваших примерах)
+let map = [
     [1, 1, 1, 1, 1, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 1],
     [1, 0, 1, 0, 0, 1, 0, 1],
@@ -17,55 +108,223 @@ const map = [
     [1, 1, 1, 1, 1, 1, 1, 1]
 ];
 
-let player = { x: 3.5, y: 3.5, angle: 0 };
+const mapRows = map.length;
+const mapCols = map[0].length;
 
-function draw() {
-    ctx.fillStyle = "#333";
-    ctx.fillRect(0, 0, 640, 240); // Потолок
-    ctx.fillStyle = "#666";
-    ctx.fillRect(0, 240, 640, 240); // Пол
+// Векторный игрок (Скриншот 2)
+let player = {
+    x: 3.5,
+    y: 3.5,
+    dirX: 1.0,   
+    dirY: 0.0,
+    planeX: 0.0, 
+    planeY: 0.66 
+};
 
-    // FOV 60 градусов
-    for (let x = 0; x < 640; x++) {
-        let rayAngle = (player.angle - 0.5) + (x / 640);
-        let dist = castRayDDA(player.x, player.y, rayAngle);
-        
-        // Исправление рыбьего глаза
-        let correctedDist = dist * Math.cos(rayAngle - player.angle);
-        let wallHeight = 400 / correctedDist;
-        
-        // Рисуем полоску стены
-        ctx.fillStyle = `rgb(0, ${255 - dist * 30}, 0)`; // Цвет зависит от расстояния
-        ctx.fillRect(x, 240 - wallHeight / 2, 1, wallHeight);
+let keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+
+window.addEventListener('keydown', e => { if(e.code in keys) keys[e.code] = true; });
+window.addEventListener('keyup', e => { if(e.code in keys) keys[e.code] = false; });
+
+// --- ИНИЦИАЛИЗАЦИЯ РЕДАКТОРА КАРТЫ ---
+function createEditor() {
+    editorGrid.innerHTML = '';
+    for (let r = 0; r < mapRows; r++) {
+        for (let c = 0; c < mapCols; c++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell');
+            if (map[r][c] === 1) cell.classList.add('wall');
+            
+            // Отображаем иконку игрока на сетке редактора
+            if (Math.floor(player.y) === r && Math.floor(player.x) === c) {
+                cell.classList.add('player-cell');
+            }
+
+            // Переключение стены по клику
+            cell.addEventListener('click', () => {
+                // Не разрешаем ставить стену прямо на игрока
+                if (Math.floor(player.y) === r && Math.floor(player.x) === c) return;
+                
+                map[r][c] = map[r][c] === 1 ? 0 : 1;
+                cell.classList.toggle('wall');
+            });
+
+            editorGrid.appendChild(cell);
+        }
+    }
+}
+
+// Обновление положения маркера игрока в редакторе
+function updateEditorPlayerMarker() {
+    const cells = editorGrid.children;
+    const pR = Math.floor(player.y);
+    const pC = Math.floor(player.x);
+    
+    for (let i = 0; i < cells.length; i++) {
+        cells[i].classList.remove('player-cell');
     }
     
-    player.angle += 0.01; // Вращение камеры для демонстрации
+    const index = pR * mapCols + pC;
+    if (cells[index]) {
+        cells[index].classList.add('player-cell');
+    }
+}
+
+function updatePlayer() {
+    let moveSpeed = 0.04;
+    let rotSpeed = 0.03;
+
+    if (keys.ArrowRight) {
+        let oldDirX = player.dirX;
+        player.dirX = player.dirX * Math.cos(rotSpeed) - player.dirY * Math.sin(rotSpeed);
+        player.dirY = oldDirX * Math.sin(rotSpeed) + player.dirY * Math.cos(rotSpeed);
+        let oldPlaneX = player.planeX;
+        player.planeX = player.planeX * Math.cos(rotSpeed) - player.planeY * Math.sin(rotSpeed);
+        player.planeY = oldPlaneX * Math.sin(rotSpeed) + player.planeY * Math.cos(rotSpeed);
+    }
+    if (keys.ArrowLeft) {
+        let oldDirX = player.dirX;
+        player.dirX = player.dirX * Math.cos(-rotSpeed) - player.dirY * Math.sin(-rotSpeed);
+        player.dirY = oldDirX * Math.sin(-rotSpeed) + player.dirY * Math.cos(-rotSpeed);
+        let oldPlaneX = player.planeX;
+        player.planeX = player.planeX * Math.cos(-rotSpeed) - player.planeY * Math.sin(-rotSpeed);
+        player.planeY = oldPlaneX * Math.sin(-rotSpeed) + player.planeY * Math.cos(-rotSpeed);
+    }
+
+    if (keys.ArrowUp) {
+        if (map[Math.floor(player.y)][Math.floor(player.x + player.dirX * moveSpeed)] === 0) player.x += player.dirX * moveSpeed;
+        if (map[Math.floor(player.y + player.dirY * moveSpeed)][Math.floor(player.x)] === 0) player.y += player.dirY * moveSpeed;
+    }
+    if (keys.ArrowDown) {
+        if (map[Math.floor(player.y)][Math.floor(player.x - player.dirX * moveSpeed)] === 0) player.x -= player.dirX * moveSpeed;
+        if (map[Math.floor(player.y - player.dirY * moveSpeed)][Math.floor(player.x)] === 0) player.y -= player.dirY * moveSpeed;
+    }
+
+    if (keys.ArrowUp || keys.ArrowDown || keys.ArrowLeft || keys.ArrowRight) {
+        updateEditorPlayerMarker();
+    }
+}
+
+// --- ОТРИСОВКА МИНИ-КАРТЫ ---
+function drawMinimap() {
+    const size = 16; // Размер одной плитки мини-карты в пикселях
+    const offset = 15; // Отступ мини-карты от краев экрана canvas
+    
+    // Полупрозрачный темный фон под картой
+    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+    ctx.fillRect(offset - 5, offset - 5, mapCols * size + 10, mapRows * size + 10);
+
+    for (let r = 0; r < mapRows; r++) {
+        for (let c = 0; c < mapCols; c++) {
+            if (map[r][c] === 1) {
+                ctx.fillStyle = "rgba(0, 255, 0, 0.8)"; // Стены зеленые
+            } else {
+                ctx.fillStyle = "rgba(85, 85, 85, 0.4)"; // Пустота серая
+            }
+            ctx.fillRect(offset + c * size, offset + r * size, size - 1, size - 1);
+        }
+    }
+
+    // Отрисовка игрока на мини-карте
+    const pX = offset + player.x * size;
+    const pY = offset + player.y * size;
+
+    // Вектор взгляда
+    ctx.strokeStyle = "#ff3333";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pX, pY);
+    ctx.lineTo(pX + player.dirX * (size * 0.8), pY + player.dirY * (size * 0.8));
+    ctx.stroke();
+
+    // Точка игрока
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(pX, pY, 4, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+function draw() {
+    updatePlayer();
+
+    // Рендер 3D пространства (Небо / Пол)
+    ctx.fillStyle = "#2a2a2a";
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight / 2);
+    ctx.fillStyle = "#555555";
+    ctx.fillRect(0, canvasHeight / 2, canvasWidth, canvasHeight / 2);
+
+    // Векторный Raycasting (Скриншот 2)
+    for (let x = 0; x < canvasWidth; x++) {
+        let cameraX = 2 * x / canvasWidth - 1;
+        let rayDirX = player.dirX + player.planeX * cameraX;
+        let rayDirY = player.dirY + player.planeY * cameraX;
+
+        let mapX = Math.floor(player.x);
+        let mapY = Math.floor(player.y);
+
+        let deltaDistX = Math.abs(1 / (rayDirX || 0.00001));
+        let deltaDistY = Math.abs(1 / (rayDirY || 0.00001));
+
+        let stepX, stepY, sideDistX, sideDistY;
+
+        if (rayDirX < 0) {
+            stepX = -1;
+            sideDistX = (player.x - mapX) * deltaDistX;
+        } else {
+            stepX = 1;
+            sideDistX = (mapX + 1.0 - player.x) * deltaDistX;
+        }
+        if (rayDirY < 0) {
+            stepY = -1;
+            sideDistY = (player.y - mapY) * deltaDistY;
+        } else {
+            stepY = 1;
+            sideDistY = (mapY + 1.0 - player.y) * deltaDistY;
+        }
+
+        let hit = 0, side = 0;
+        while (hit === 0) {
+            if (sideDistX < sideDistY) {
+                sideDistX += deltaDistX;
+                mapX += stepX;
+                side = 0;
+            } else {
+                sideDistY += deltaDistY;
+                mapY += stepY;
+                side = 1;
+            }
+            // Предотвращение вылета за границы массива карты при редактировании
+            if (mapY < 0 || mapY >= mapRows || mapX < 0 || mapX >= mapCols) {
+                hit = 1; 
+                break;
+            }
+            if (map[mapY][mapX] === 1) hit = 1;
+        }
+
+        let perpWallDist;
+        if (side === 0) perpWallDist = (mapX - player.x + (1 - stepX) / 2) / rayDirX;
+        else            perpWallDist = (mapY - player.y + (1 - stepY) / 2) / rayDirY;
+
+        let wallHeight = canvasHeight / (perpWallDist + 0.0001);
+        let colorValue = Math.max(0, 255 - perpWallDist * 35);
+
+        if (side === 1) {
+            ctx.fillStyle = `rgb(0, ${colorValue * 0.7}, 0)`; 
+        } else {
+            ctx.fillStyle = `rgb(0, ${colorValue}, 0)`;
+        }
+
+        ctx.fillRect(x, (canvasHeight - wallHeight) / 2, 1, wallHeight);
+    }
+
+    // Поверх 3D сцены рисуем мини-карту
+    drawMinimap();
+
     requestAnimationFrame(draw);
 }
 
-function castRayDDA(px, py, angle) {
-    let dx = Math.cos(angle), dy = Math.sin(angle);
-    let mapX = Math.floor(px), mapY = Math.floor(py);
-    let deltaX = Math.abs(1 / dx), deltaY = Math.abs(1 / dy);
-    
-    let stepX = dx < 0 ? -1 : 1;
-    let stepY = dy < 0 ? -1 : 1;
-    let sideX = (dx < 0 ? px - mapX : mapX + 1 - px) * deltaX;
-    let sideY = (dy < 0 ? py - mapY : mapY + 1 - py) * deltaY;
-
-    for (let i = 0; i < 20; i++) {
-        if (sideX < sideY) {
-            sideX += deltaX;
-            mapX += stepX;
-        } else {
-            sideY += deltaY;
-            mapY += stepY;
-        }
-        if (map[mapY][mapX] === 1) return (sideX < sideY ? sideX - deltaX : sideY - deltaY);
-    }
-    return 20;
-}
-
+// Запуск
+createEditor();
 draw();
 </script>
 </body>
