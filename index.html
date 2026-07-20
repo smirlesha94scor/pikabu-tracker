@@ -2,107 +2,224 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <title>3D Движок + Редактор карт + Мини-карта</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Дрон: Интерактивный Симулятор с Камерами CCTV</title>
+    <!-- Подключаем Tailwind CSS для премиального внешнего вида -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    
     <style>
         body {
-            background: #222;
-            color: #fff;
-            font-family: sans-serif;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 100vh;
-            margin: 0;
-            padding: 20px;
-            box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
+            background-color: #0b0f19;
         }
-        .game-container {
-            position: relative;
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
         }
-        canvas {
-            border: 2px solid #555;
-            background: #000;
-            display: block;
+        /* Стилизация скроллбара */
+        ::-webkit-scrollbar {
+            width: 8px;
         }
-        .editor-container {
-            margin-top: 20px;
-            background: #333;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #555;
-            text-align: center;
+        ::-webkit-scrollbar-track {
+            background: #111827;
         }
-        .editor-grid {
-            display: grid;
-            grid-template-columns: repeat(8, 40px);
-            grid-gap: 2px;
-            margin-top: 10px;
-            background: #222;
-            padding: 5px;
+        ::-webkit-scrollbar-thumb {
+            background: #374151;
             border-radius: 4px;
         }
-        .cell {
-            width: 40px;
-            height: 40px;
-            background: #444;
-            border: 1px solid #555;
-            cursor: pointer;
-            transition: background 0.1s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 10px;
-            user-select: none;
+        ::-webkit-scrollbar-thumb:hover {
+            background: #4b5563;
         }
-        .cell.wall {
-            background: #00ff00;
-            border-color: #00cc00;
+        /* Анимация сканирования на мониторе камер */
+        @keyframes scanline {
+            0% { transform: translateY(-100%); }
+            100% { transform: translateY(100%); }
         }
-        .cell.player-cell {
-            position: relative;
+        .scanline-effect::after {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%), linear-gradient(90deg, rgba(255, 0, 0, 0.06), rgba(0, 255, 0, 0.02), rgba(0, 0, 255, 0.06));
+            background-size: 100% 4px, 6px 100%;
+            pointer-events: none;
         }
-        .cell.player-cell::after {
-            content: "🛸";
-            font-size: 18px;
-        }
-        .instructions {
-            margin-top: 10px;
-            font-size: 13px;
-            color: #aaa;
+        .scanbar::before {
+            content: '';
+            position: absolute;
+            width: 100%; height: 3px;
+            background: rgba(34, 211, 238, 0.3);
+            animation: scanline 4s linear infinite;
+            pointer-events: none;
         }
     </style>
 </head>
-<body>
+<body class="text-gray-100 min-h-screen flex flex-col items-center justify-start p-4 md:p-8">
 
-    <!-- 3D Экран игры -->
-    <div class="game-container">
-        <canvas id="game" width="640" height="480"></canvas>
-    </div>
+    <!-- Хедер приложения -->
+    <header class="w-full max-w-6xl text-center mb-6">
+        <h1 class="text-3xl md:text-4xl font-extrabold tracking-tight bg-gradient-to-r from-cyan-400 via-teal-400 to-indigo-500 bg-clip-text text-transparent">
+            3D DRONE SIMULATOR & INTERACTIVE CCTV SYSTEM
+        </h1>
+        <p class="text-gray-400 text-sm mt-2">
+            Управляйте полетом дрона, стройте стены, расставляйте камеры наблюдения в углах и настраивайте их углы обзора в реальном времени.
+        </p>
+    </header>
 
-    <!-- Редактор карты под экраном -->
-    <div class="editor-container">
-        <h3>🛠️ Интерактивный редактор карты</h3>
-        <p style="margin: 0; font-size: 14px; color: #ccc;">Кликайте по ячейкам, чтобы строить или убирать стены в реальном времени</p>
-        <div class="editor-grid" id="mapEditor"></div>
-        <div class="instructions">Управление: <b>Стрелочки</b> — движение и поворот камеры</div>
-    </div>
+    <!-- Основной контейнер интерфейса -->
+    <main class="w-full max-w-6xl grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        
+        <!-- Левая колонка: 3D-Экран симулятора и PiP-монитор -->
+        <div class="col-span-1 lg:col-span-7 flex flex-col gap-4">
+            <div class="relative bg-gray-900 border-2 border-gray-700 rounded-xl overflow-hidden shadow-2xl aspect-[4/3] w-full">
+                <!-- Главный 3D-экран -->
+                <canvas id="game" class="w-full h-full block" width="640" height="480"></canvas>
+
+                <!-- PIP Монитор CCTV (Расположен внизу слева) -->
+                <div class="absolute bottom-4 left-4 w-44 h-32 md:w-52 md:h-36 bg-black border-2 border-cyan-500 rounded-lg overflow-hidden shadow-lg flex flex-col scanline-effect scanbar">
+                    <!-- Заголовок монитора -->
+                    <div class="bg-cyan-950/80 px-2 py-0.5 text-[10px] text-cyan-400 font-bold flex justify-between items-center border-b border-cyan-800/50 z-10">
+                        <span class="flex items-center gap-1">
+                            <span class="w-1.5 h-1.5 bg-red-500 rounded-full animate-ping"></span>
+                            CCTV_FEED <span id="cctv-label-id">#1</span>
+                        </span>
+                        <span id="cctv-angle-label" class="mono text-[9px]">0°</span>
+                    </div>
+                    <!-- Canvas для рендеринга камеры -->
+                    <div class="relative flex-1 bg-neutral-950 flex items-center justify-center">
+                        <canvas id="cctvCanvas" width="200" height="150" class="w-full h-full block hidden"></canvas>
+                        <!-- Экран помех / Отсутствия сигнала -->
+                        <div id="cctvNoise" class="absolute inset-0 bg-neutral-900 flex flex-col items-center justify-center">
+                            <div class="text-cyan-500 font-semibold text-xs tracking-wider animate-pulse mb-1">NO SIGNAL</div>
+                            <div class="text-[9px] text-gray-500 text-center px-2">Установите камеру на карту в редакторе</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Виртуальный джойстик для мобильных устройств (Отображается только на тач-скринах) -->
+                <div id="touchControls" class="absolute bottom-4 right-4 flex gap-2 sm:hidden z-10">
+                    <button id="btnUp" class="w-12 h-12 bg-gray-800/80 active:bg-cyan-500 rounded-full border border-gray-600 text-xl flex items-center justify-center select-none">▲</button>
+                    <div class="flex flex-col gap-2">
+                        <div class="flex gap-2">
+                            <button id="btnLeft" class="w-12 h-12 bg-gray-800/80 active:bg-cyan-500 rounded-full border border-gray-600 text-xl flex items-center justify-center select-none">◀</button>
+                            <button id="btnDown" class="w-12 h-12 bg-gray-800/80 active:bg-cyan-500 rounded-full border border-gray-600 text-xl flex items-center justify-center select-none">▼</button>
+                            <button id="btnRight" class="w-12 h-12 bg-gray-800/80 active:bg-cyan-500 rounded-full border border-gray-600 text-xl flex items-center justify-center select-none">▶</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Табло телеметрии полета -->
+            <div class="bg-gray-900/80 border border-gray-800 p-4 rounded-xl grid grid-cols-3 gap-4 text-center">
+                <div>
+                    <span class="text-xs text-gray-400 block uppercase">Скорость</span>
+                    <span id="speedVal" class="text-lg font-bold text-emerald-400 mono">0.0 km/h</span>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-400 block uppercase">Позиция</span>
+                    <span id="posVal" class="text-lg font-bold text-cyan-400 mono">X: 3.5, Y: 3.5</span>
+                </div>
+                <div>
+                    <span class="text-xs text-gray-400 block uppercase">Гироскоп</span>
+                    <span class="text-lg font-bold text-indigo-400 mono">STABLE</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Правая колонка: Интерактивный редактор и настройки -->
+        <div class="col-span-1 lg:col-span-5 flex flex-col gap-6">
+            
+            <!-- Интерактивный редактор -->
+            <div class="bg-gray-900 border border-gray-800 p-5 rounded-xl shadow-xl">
+                <div class="flex items-center justify-between mb-4 border-b border-gray-800 pb-3">
+                    <h3 class="text-lg font-bold text-gray-200 flex items-center gap-2">
+                        <span>🛠️</span> Редактор карты и камер
+                    </h3>
+                    <span class="text-xs bg-gray-800 px-2.5 py-1 rounded-full text-gray-400">Сетка 8x7</span>
+                </div>
+
+                <!-- Переключатель инструментов -->
+                <div class="grid grid-cols-3 gap-2 mb-4">
+                    <button id="toolWall" class="py-2 px-3 rounded-lg bg-emerald-600 text-white font-semibold text-xs flex flex-col items-center gap-1 transition shadow border border-emerald-500 hover:bg-emerald-500">
+                        <span class="text-base">🧱</span>
+                        <span>Стена</span>
+                    </button>
+                    <button id="toolCamera" class="py-2 px-3 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold text-xs flex flex-col items-center gap-1 transition border border-gray-700">
+                        <span class="text-base">📹</span>
+                        <span>Поставить камеру</span>
+                    </button>
+                    <button id="toolEraser" class="py-2 px-3 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold text-xs flex flex-col items-center gap-1 transition border border-gray-700">
+                        <span class="text-base">❌</span>
+                        <span>Ластик</span>
+                    </button>
+                </div>
+
+                <!-- Интерактивная сетка редактора -->
+                <div class="flex justify-center my-4">
+                    <div id="mapEditor" class="grid grid-cols-8 gap-1.5 bg-gray-950 p-3 rounded-lg border border-gray-800">
+                        <!-- Ячейки генерируются динамически через JS -->
+                    </div>
+                </div>
+
+                <!-- Панель настроек выбранной камеры (Отображается при выборе камеры) -->
+                <div id="cameraConfigPanel" class="bg-gray-800/60 border border-cyan-900/50 p-4 rounded-lg hidden mt-4 transition-all duration-300">
+                    <h4 class="text-sm font-semibold text-cyan-400 flex items-center gap-2 mb-2">
+                        <span>⚙️</span> Настройка камеры <span id="selectedCamId" class="mono bg-cyan-950 px-1.5 py-0.5 rounded text-xs text-white">#1</span>
+                    </h4>
+                    <div class="flex flex-col gap-3">
+                        <div>
+                            <div class="flex justify-between text-xs text-gray-400 mb-1">
+                                <span>Направление камеры:</span>
+                                <span id="angleValueDisplay" class="font-bold text-white mono">0°</span>
+                            </div>
+                            <input id="cameraAngleSlider" type="range" min="0" max="360" value="0" class="w-full accent-cyan-400 bg-gray-700 h-1.5 rounded-lg cursor-pointer">
+                        </div>
+                        <div class="flex gap-2">
+                            <button id="btnMakeActiveCam" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs py-2 rounded transition shadow-md">
+                                Сделать активной
+                            </button>
+                            <button id="btnDeleteCam" class="bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 font-semibold text-xs px-3 py-2 rounded transition">
+                                Удалить
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Инструкция управления -->
+            <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl text-xs text-gray-400 flex flex-col gap-2">
+                <span class="font-bold text-gray-200 uppercase tracking-wider text-[10px] text-cyan-400">Управление дроном:</span>
+                <p>• <b class="text-white">Стрелочка Вверх / Вниз</b> — движение дрона вперед и назад.</p>
+                <p>• <b class="text-white">Стрелочка Влево / Вправо</b> — разворот и наклон камеры.</p>
+                <p class="mt-1 text-emerald-400">Прокрутка страницы стрелочками полностью заблокирована для вашего удобства.</p>
+            </div>
+        </main>
 
 <script>
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+const cctvCanvas = document.getElementById('cctvCanvas');
+const cctvCtx = cctvCanvas.getContext('2d');
+const cctvNoise = document.getElementById('cctvNoise');
 const editorGrid = document.getElementById('mapEditor');
+
 const canvasWidth = canvas.width;
 const canvasHeight = canvas.height;
 
-// Переменные для расчета FPS и Delta Time
+// Переменные времени, FPS и телеметрии
 let fps = 0;
 let frameCount = 0;
 let lastFpsUpdate = performance.now();
 let lastFrameTime = performance.now();
 
-// Карта 8x7
+// Инструменты редактора: 'wall', 'camera', 'eraser'
+let currentTool = 'wall';
+
+// Индексы и ссылки для активной камеры
+let selectedCameraIndex = null;
+let activeCameraIndex = 0; 
+
+// Исходная карта 8x7
 let map = [
     [1, 1, 1, 1, 1, 1, 1, 1],
     [1, 0, 0, 0, 0, 0, 0, 1],
@@ -115,7 +232,13 @@ let map = [
 const mapRows = map.length;
 const mapCols = map[0].length;
 
-// Векторный игрок
+// Список расставленных пользователем камер
+// Угол хранится в радианах
+let cameras = [
+    { x: 1.5, y: 1.5, angle: 0.78, active: true }, // Камера по умолчанию в углу
+];
+
+// Векторный игрок (дрон)
 let player = {
     x: 3.5,
     y: 3.5,
@@ -125,32 +248,129 @@ let player = {
     planeY: 0.66 
 };
 
+// Блокировка стандартного скролла при нажатии управляющих клавиш
 let keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
 window.addEventListener('keydown', e => { 
-    if(e.code in keys) {
+    if (e.code in keys) {
         keys[e.code] = true; 
-        e.preventDefault(); // Блокирует прокрутку страницы стрелками в браузере
+        e.preventDefault(); // Блокировка прокрутки
     }
 });
-window.addEventListener('keyup', e => { if(e.code in keys) keys[e.code] = false; });
+window.addEventListener('keyup', e => { 
+    if (e.code in keys) {
+        keys[e.code] = false; 
+    }
+});
 
-// --- ИНИЦИАЛИЗАЦИЯ РЕДАКТОРА КАРТЫ ---
+// Сенсорная поддержка для мобильных устройств
+const registerTouchBtn = (id, keyName) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[keyName] = true; });
+    btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[keyName] = false; });
+    btn.addEventListener('mousedown', () => { keys[keyName] = true; });
+    btn.addEventListener('mouseup', () => { keys[keyName] = false; });
+    btn.addEventListener('mouseleave', () => { keys[keyName] = false; });
+};
+registerTouchBtn('btnUp', 'ArrowUp');
+registerTouchBtn('btnDown', 'ArrowDown');
+registerTouchBtn('btnLeft', 'ArrowLeft');
+registerTouchBtn('btnRight', 'ArrowRight');
+
+// Управление кнопками выбора инструментов
+const toolWallBtn = document.getElementById('toolWall');
+const toolCameraBtn = document.getElementById('toolCamera');
+const toolEraserBtn = document.getElementById('toolEraser');
+
+function updateToolUI() {
+    [toolWallBtn, toolCameraBtn, toolEraserBtn].forEach(b => {
+        b.className = "py-2 px-3 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-300 font-semibold text-xs flex flex-col items-center gap-1 transition border border-gray-700";
+    });
+    if (currentTool === 'wall') {
+        toolWallBtn.className = "py-2 px-3 rounded-lg bg-emerald-600 text-white font-semibold text-xs flex flex-col items-center gap-1 transition shadow border border-emerald-500 hover:bg-emerald-500";
+    } else if (currentTool === 'camera') {
+        toolCameraBtn.className = "py-2 px-3 rounded-lg bg-cyan-600 text-white font-semibold text-xs flex flex-col items-center gap-1 transition shadow border border-cyan-500 hover:bg-cyan-500";
+    } else if (currentTool === 'eraser') {
+        toolEraserBtn.className = "py-2 px-3 rounded-lg bg-rose-600 text-white font-semibold text-xs flex flex-col items-center gap-1 transition shadow border border-rose-500 hover:bg-rose-500";
+    }
+}
+
+toolWallBtn.addEventListener('click', () => { currentTool = 'wall'; updateToolUI(); });
+toolCameraBtn.addEventListener('click', () => { currentTool = 'camera'; updateToolUI(); });
+toolEraserBtn.addEventListener('click', () => { currentTool = 'eraser'; updateToolUI(); });
+
+// Инициализация сетки редактора
 function createEditor() {
     editorGrid.innerHTML = '';
     for (let r = 0; r < mapRows; r++) {
         for (let c = 0; c < mapCols; c++) {
             const cell = document.createElement('div');
-            cell.classList.add('cell');
-            if (map[r][c] === 1) cell.classList.add('wall');
+            cell.className = "cell w-10 h-10 bg-gray-800 border border-gray-700 cursor-pointer transition flex items-center justify-center rounded select-none text-xs hover:border-gray-500";
             
-            if (Math.floor(player.y) === r && Math.floor(player.x) === c) {
-                cell.classList.add('player-cell');
+            // Отрисовка исходного лабиринта
+            if (map[r][c] === 1) {
+                cell.className += " bg-emerald-600 border-emerald-500 shadow-inner";
+            }
+            
+            // Если в этой клетке стоит камера
+            const cam = cameras.find(cam => Math.floor(cam.y) === r && Math.floor(cam.x) === c);
+            if (cam) {
+                cell.className += " bg-cyan-950 border-cyan-500 text-cyan-400 font-bold";
+                cell.innerHTML = "📹";
+                if (cameras.indexOf(cam) === selectedCameraIndex) {
+                    cell.className += " ring-2 ring-cyan-400";
+                }
+            } else if (Math.floor(player.y) === r && Math.floor(player.x) === c) {
+                // Иконка дрона
+                cell.className += " font-bold text-lg";
+                cell.innerHTML = "🛸";
             }
 
+            // Обработка клика по ячейке редактора
             cell.addEventListener('click', () => {
-                if (Math.floor(player.y) === r && Math.floor(player.x) === c) return;
-                map[r][c] = map[r][c] === 1 ? 0 : 1;
-                cell.classList.toggle('wall');
+                const isPlayerHere = (Math.floor(player.y) === r && Math.floor(player.x) === c);
+                
+                if (currentTool === 'wall') {
+                    if (isPlayerHere) return;
+                    // Удаляем камеру, если ставим стену сверху
+                    const camIdx = cameras.findIndex(cam => Math.floor(cam.y) === r && Math.floor(cam.x) === c);
+                    if (camIdx !== -1) {
+                        cameras.splice(camIdx, 1);
+                        if (selectedCameraIndex === camIdx) selectedCameraIndex = null;
+                        if (activeCameraIndex >= cameras.length) activeCameraIndex = Math.max(0, cameras.length - 1);
+                    }
+                    map[r][c] = map[r][c] === 1 ? 0 : 1;
+                } 
+                else if (currentTool === 'camera') {
+                    if (map[r][c] === 1 || isPlayerHere) return; // Нельзя ставить на стены и игрока
+                    
+                    const existingCam = cameras.find(cam => Math.floor(cam.y) === r && Math.floor(cam.x) === c);
+                    if (existingCam) {
+                        // Выбираем для редактирования существующую камеру
+                        selectedCameraIndex = cameras.indexOf(existingCam);
+                    } else {
+                        // Ставим новую камеру со взглядом в центр
+                        const newCam = { x: c + 0.5, y: r + 0.5, angle: 0, active: true };
+                        cameras.push(newCam);
+                        selectedCameraIndex = cameras.length - 1;
+                        activeCameraIndex = selectedCameraIndex; // Сразу выводим на монитор
+                    }
+                } 
+                else if (currentTool === 'eraser') {
+                    if (isPlayerHere) return;
+                    // Стираем стены
+                    map[r][c] = 0;
+                    // Стираем камеры
+                    const camIdx = cameras.findIndex(cam => Math.floor(cam.y) === r && Math.floor(cam.x) === c);
+                    if (camIdx !== -1) {
+                        cameras.splice(camIdx, 1);
+                        if (selectedCameraIndex === camIdx) selectedCameraIndex = null;
+                        if (activeCameraIndex >= cameras.length) activeCameraIndex = Math.max(0, cameras.length - 1);
+                    }
+                }
+
+                createEditor();
+                updateCameraConfigPanel();
             });
 
             editorGrid.appendChild(cell);
@@ -158,24 +378,56 @@ function createEditor() {
     }
 }
 
-function updateEditorPlayerMarker() {
-    const cells = editorGrid.children;
-    const pR = Math.floor(player.y);
-    const pC = Math.floor(player.x);
-    
-    for (let i = 0; i < cells.length; i++) {
-        cells[i].classList.remove('player-cell');
+// Поведение UI панели управления параметрами камеры
+const configPanel = document.getElementById('cameraConfigPanel');
+const selectedCamIdSpan = document.getElementById('selectedCamId');
+const angleSlider = document.getElementById('cameraAngleSlider');
+const angleValueDisplay = document.getElementById('angleValueDisplay');
+const btnMakeActiveCam = document.getElementById('btnMakeActiveCam');
+const btnDeleteCam = document.getElementById('btnDeleteCam');
+
+function updateCameraConfigPanel() {
+    if (selectedCameraIndex === null || !cameras[selectedCameraIndex]) {
+        configPanel.classList.add('hidden');
+        return;
     }
+    const cam = cameras[selectedCameraIndex];
+    configPanel.classList.remove('hidden');
+    selectedCamIdSpan.innerText = `#${selectedCameraIndex + 1}`;
     
-    const index = pR * mapCols + pC;
-    if (cells[index]) {
-        cells[index].classList.add('player-cell');
-    }
+    // Преобразуем радианы в градусы
+    const deg = Math.round((cam.angle * 180) / Math.PI) % 360;
+    angleSlider.value = deg < 0 ? deg + 360 : deg;
+    angleValueDisplay.innerText = `${angleSlider.value}°`;
 }
 
-// Плавное движение с учетом dt (Delta Time)
+// Реакция на вращение ползунка угла камеры
+angleSlider.addEventListener('input', () => {
+    if (selectedCameraIndex !== null && cameras[selectedCameraIndex]) {
+        const rad = (parseInt(angleSlider.value) * Math.PI) / 180;
+        cameras[selectedCameraIndex].angle = rad;
+        angleValueDisplay.innerText = `${angleSlider.value}°`;
+    }
+});
+
+btnMakeActiveCam.addEventListener('click', () => {
+    if (selectedCameraIndex !== null) {
+        activeCameraIndex = selectedCameraIndex;
+    }
+});
+
+btnDeleteCam.addEventListener('click', () => {
+    if (selectedCameraIndex !== null) {
+        cameras.splice(selectedCameraIndex, 1);
+        selectedCameraIndex = null;
+        if (activeCameraIndex >= cameras.length) activeCameraIndex = Math.max(0, cameras.length - 1);
+        createEditor();
+        updateCameraConfigPanel();
+    }
+});
+
 function updatePlayer(dt) {
-    let moveSpeed = 2.5 * dt; // Скорость завязана на время
+    let moveSpeed = 2.5 * dt; 
     let rotSpeed = 2.0 * dt;
 
     if (keys.ArrowRight) {
@@ -195,68 +447,311 @@ function updatePlayer(dt) {
         player.planeY = oldPlaneX * Math.sin(-rotSpeed) + player.planeY * Math.cos(-rotSpeed);
     }
 
+    let actualSpeed = 0;
     if (keys.ArrowUp) {
         if (map[Math.floor(player.y)][Math.floor(player.x + player.dirX * moveSpeed)] === 0) player.x += player.dirX * moveSpeed;
         if (map[Math.floor(player.y + player.dirY * moveSpeed)][Math.floor(player.x)] === 0) player.y += player.dirY * moveSpeed;
+        actualSpeed = 15.4;
     }
     if (keys.ArrowDown) {
         if (map[Math.floor(player.y)][Math.floor(player.x - player.dirX * moveSpeed)] === 0) player.x -= player.dirX * moveSpeed;
         if (map[Math.floor(player.y - player.dirY * moveSpeed)][Math.floor(player.x)] === 0) player.y -= player.dirY * moveSpeed;
+        actualSpeed = 11.2;
     }
 
+    // Вывод телеметрии
+    document.getElementById('speedVal').innerText = `${actualSpeed.toFixed(1)} km/h`;
+    document.getElementById('posVal').innerText = `X: ${player.x.toFixed(1)}, Y: ${player.y.toFixed(1)}`;
+
     if (keys.ArrowUp || keys.ArrowDown || keys.ArrowLeft || keys.ArrowRight) {
-        updateEditorPlayerMarker();
+        // Синхронизируем положение в редакторе без полной перерисовки
+        createEditor();
     }
 }
 
-// --- ОТРИСОВКА МИНИ-КАРТЫ ---
 function drawMinimap() {
     const size = 16;
     const offset = 15;
     
-    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+    // Подложка карты
+    ctx.fillStyle = "rgba(11, 15, 25, 0.85)";
     ctx.fillRect(offset - 5, offset - 5, mapCols * size + 10, mapRows * size + 10);
+    ctx.strokeStyle = "rgba(75, 85, 99, 0.4)";
+    ctx.strokeRect(offset - 5, offset - 5, mapCols * size + 10, mapRows * size + 10);
 
     for (let r = 0; r < mapRows; r++) {
         for (let c = 0; c < mapCols; c++) {
             if (map[r][c] === 1) {
-                ctx.fillStyle = "rgba(0, 255, 0, 0.8)";
+                ctx.fillStyle = "#10b981"; // Стены (зеленые)
             } else {
-                ctx.fillStyle = "rgba(85, 85, 85, 0.4)";
+                ctx.fillStyle = "rgba(31, 41, 55, 0.5)"; // Проходы
             }
             ctx.fillRect(offset + c * size, offset + r * size, size - 1, size - 1);
         }
     }
 
+    // Отрисовка камер и их углов обзора на мини-карте
+    cameras.forEach((cam, idx) => {
+        const cx = offset + cam.x * size;
+        const cy = offset + cam.y * size;
+
+        // Рисуем конус угла обзора (FOV: 60 градусов)
+        const fov = 60 * Math.PI / 180;
+        ctx.fillStyle = idx === activeCameraIndex ? "rgba(6, 182, 212, 0.25)" : "rgba(156, 163, 175, 0.15)";
+        ctx.beginPath();
+        ctx.moveTo(cx, cy);
+        ctx.arc(cx, cy, 32, cam.angle - fov / 2, cam.angle + fov / 2);
+        ctx.closePath();
+        ctx.fill();
+
+        // Сама камера
+        ctx.fillStyle = idx === activeCameraIndex ? "#06b6d4" : "#9ca3af";
+        ctx.beginPath();
+        ctx.arc(cx, cy, 5, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Индикатор выбора камеры
+        if (idx === selectedCameraIndex) {
+            ctx.strokeStyle = "#e11d48";
+            ctx.lineWidth = 1.5;
+            ctx.strokeRect(cx - 7, cy - 7, 14, 14);
+        }
+    });
+
     const pX = offset + player.x * size;
     const pY = offset + player.y * size;
 
-    ctx.strokeStyle = "#ff3333";
+    // Свечение дрона (пульсирующий ореол)
+    const pulse = 4 + Math.sin(performance.now() / 150) * 1.5;
+    ctx.fillStyle = "rgba(14, 165, 233, 0.4)";
+    ctx.beginPath();
+    ctx.arc(pX, pY, pulse, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Вектор взгляда дрона
+    ctx.strokeStyle = "#f43f5e";
     ctx.lineWidth = 2;
     ctx.beginPath();
     ctx.moveTo(pX, pY);
     ctx.lineTo(pX + player.dirX * (size * 0.8), pY + player.dirY * (size * 0.8));
     ctx.stroke();
 
+    // Ядро дрона
     ctx.fillStyle = "#ffffff";
     ctx.beginPath();
-    ctx.arc(pX, pY, 4, 0, Math.PI * 2);
+    ctx.arc(pX, pY, 3.5, 0, Math.PI * 2);
     ctx.fill();
 }
 
 function drawFPS() {
-    ctx.fillStyle = "#000000";
-    ctx.font = "bold 14px monospace";
-    ctx.fillText(`FPS: ${fps}`, 15, 465);
+    // В соответствии с вашим требованием: делаем FPS табло черным цветом
+    // Для этого рисуем сплошную светлую зеленую контрастную рамку и выводим глубокий черный текст.
+    ctx.fillStyle = "#10b981";
+    ctx.fillRect(15, 435, 75, 25);
+    ctx.strokeStyle = "#ffffff";
+    ctx.lineWidth = 1;
+    ctx.strokeRect(15, 435, 75, 25);
+
+    ctx.fillStyle = "#000000"; // Насыщенный черный цвет
+    ctx.font = "bold 13px monospace";
+    ctx.fillText(`FPS: ${fps}`, 22, 452);
+}
+
+// Функция 3D-рендеринга с ракурса выбранной камеры (CCTV Feed)
+function renderCCTV() {
+    const activeCam = cameras[activeCameraIndex];
+    if (!activeCam) {
+        cctvCanvas.classList.add('hidden');
+        cctvNoise.classList.remove('hidden');
+        document.getElementById('cctv-label-id').innerText = "#ERR";
+        document.getElementById('cctv-angle-label').innerText = "0°";
+        return;
+    }
+
+    cctvCanvas.classList.remove('hidden');
+    cctvNoise.classList.add('hidden');
+
+    const pipIdDisplay = activeCameraIndex + 1;
+    document.getElementById('cctv-label-id').innerText = `#${pipIdDisplay}`;
+    const camDeg = Math.round((activeCam.angle * 180) / Math.PI) % 360;
+    document.getElementById('cctv-angle-label').innerText = `${camDeg < 0 ? camDeg + 360 : camDeg}°`;
+
+    const w = cctvCanvas.width;
+    const h = cctvCanvas.height;
+
+    // Свежая заливка неба и пола в стиле милитари/инфракрасной камеры
+    cctvCtx.fillStyle = "#101f18"; // Зеленоватое темное небо
+    cctvCtx.fillRect(0, 0, w, h / 2);
+    cctvCtx.fillStyle = "#050a07"; // Почти темный пол
+    cctvCtx.fillRect(0, h / 2, w, h / 2);
+
+    // Логика направления камеры
+    const camDirX = Math.cos(activeCam.angle);
+    const camDirY = Math.sin(activeCam.angle);
+    // Вектор перпендикуляра обзора
+    const camPlaneX = -camDirY * 0.66;
+    const camPlaneY = camDirX * 0.66;
+
+    // Оптимизированный рендеринг камеры (шаг = 3 пикселя для идеальной плавности)
+    const cctvStep = 3;
+    const depthBuffer = new Array(w).fill(Infinity);
+
+    for (let x = 0; x < w; x += cctvStep) {
+        let cameraX = 2 * x / w - 1;
+        let rayDirX = camDirX + camPlaneX * cameraX;
+        let rayDirY = camDirY + camPlaneY * cameraX;
+
+        let mapX = Math.floor(activeCam.x);
+        let mapY = Math.floor(activeCam.y);
+
+        let deltaDistX = Math.abs(1 / (rayDirX || 0.00001));
+        let deltaDistY = Math.abs(1 / (rayDirY || 0.00001));
+
+        let stepX, stepY, sideDistX, sideDistY;
+
+        if (rayDirX < 0) {
+            stepX = -1;
+            sideDistX = (activeCam.x - mapX) * deltaDistX;
+        } else {
+            stepX = 1;
+            sideDistX = (mapX + 1.0 - activeCam.x) * deltaDistX;
+        }
+        if (rayDirY < 0) {
+            stepY = -1;
+            sideDistY = (activeCam.y - mapY) * deltaDistY;
+        } else {
+            stepY = 1;
+            sideDistY = (mapY + 1.0 - activeCam.y) * deltaDistY;
+        }
+
+        let hit = 0, side = 0;
+        while (hit === 0) {
+            if (sideDistX < sideDistY) {
+                sideDistX += deltaDistX;
+                mapX += stepX;
+                side = 0;
+            } else {
+                sideDistY += deltaDistY;
+                mapY += stepY;
+                side = 1;
+            }
+            if (mapY < 0 || mapY >= mapRows || mapX < 0 || mapX >= mapCols) {
+                hit = 1; 
+                break;
+            }
+            if (map[mapY][mapX] === 1) hit = 1;
+        }
+
+        let perpWallDist;
+        if (side === 0) perpWallDist = (mapX - activeCam.x + (1 - stepX) / 2) / rayDirX;
+        else            perpWallDist = (mapY - activeCam.y + (1 - stepY) / 2) / rayDirY;
+
+        depthBuffer[x] = perpWallDist;
+
+        let wallHeight = h / (perpWallDist + 0.0001);
+        let colorValue = Math.max(0, 180 - perpWallDist * 25);
+
+        // Черно-зеленая ночная палитра для монитора
+        if (side === 1) {
+            cctvCtx.fillStyle = `rgb(0, ${colorValue * 0.55}, 0)`; 
+        } else {
+            cctvCtx.fillStyle = `rgb(0, ${colorValue * 0.8}, 0)`;
+        }
+
+        cctvCtx.fillRect(x, (h - wallHeight) / 2, cctvStep, wallHeight);
+    }
+
+    // Рендер дрона в 3D пространстве монитора камер
+    // 1. Проверяем попадание в зону видимости
+    const dx = player.x - activeCam.x;
+    const dy = player.y - activeCam.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+
+    // Направление на игрока относительно направления камеры
+    const angleToPlayer = Math.atan2(dy, dx);
+    let relativeAngle = angleToPlayer - activeCam.angle;
+
+    // Нормализация угла [-PI, PI]
+    while (relativeAngle < -Math.PI) relativeAngle += Math.PI * 2;
+    while (relativeAngle > Math.PI) relativeAngle -= Math.PI * 2;
+
+    const fov = 60 * Math.PI / 180;
+
+    // Если дрон в пределах 60-градусного объектива камеры
+    if (Math.abs(relativeAngle) < fov / 2) {
+        
+        // 2. Тест Line of Sight (проверяем, не скрыт ли дрон за стеной)
+        let visible = true;
+        let testX = activeCam.x;
+        let testY = activeCam.y;
+        const steps = Math.floor(dist * 10);
+        const stepX = dx / steps;
+        const stepY = dy / steps;
+
+        for (let i = 0; i < steps; i++) {
+            testX += stepX;
+            testY += stepY;
+            if (map[Math.floor(testY)][Math.floor(testX)] === 1) {
+                visible = false;
+                break;
+            }
+        }
+
+        if (visible) {
+            // Вычисляем горизонтальную координату на экране CCTV
+            const projX = (w / 2) + Math.tan(relativeAngle) / Math.tan(fov / 2) * (w / 2);
+            
+            // Если координата попадает на экран
+            if (projX >= 0 && projX < w && dist < depthBuffer[Math.floor(projX)]) {
+                // Размер дрона (Масштаб от расстояния, но не менее 16px)
+                const size = Math.max(16, h / (dist + 0.0001) * 0.4);
+                
+                cctvCtx.save();
+                cctvCtx.translate(projX, h / 2);
+
+                // Относительный угол направления дрона
+                const droneHeading = Math.atan2(player.dirY, player.dirX);
+                const droneRelativeRotation = droneHeading - activeCam.angle;
+                cctvCtx.rotate(droneRelativeRotation);
+
+                // Рисуем спрайт футуристичного дрона 🛸
+                cctvCtx.fillStyle = "#22d3ee"; // Неоновый корпус
+                cctvCtx.strokeStyle = "#ffffff";
+                cctvCtx.lineWidth = 1.5;
+
+                // Основное блюдце
+                cctvCtx.beginPath();
+                cctvCtx.ellipse(0, 0, size / 2, size / 4, 0, 0, Math.PI * 2);
+                cctvCtx.fill();
+                cctvCtx.stroke();
+
+                // Купол
+                cctvCtx.fillStyle = "#06b6d4";
+                cctvCtx.beginPath();
+                cctvCtx.arc(0, -size / 8, size / 5, Math.PI, 0);
+                cctvCtx.fill();
+                cctvCtx.stroke();
+
+                // Огни по бокам
+                cctvCtx.fillStyle = "#ef4444";
+                cctvCtx.beginPath();
+                cctvCtx.arc(-size / 2.5, 0, 2.5, 0, Math.PI * 2);
+                cctvCtx.arc(size / 2.5, 0, 2.5, 0, Math.PI * 2);
+                cctvCtx.fill();
+
+                cctvCtx.restore();
+            }
+        }
+    }
 }
 
 function draw(now) {
-    // Вычисление Delta Time (в секундах)
+    // Расчет дельты времени
     let dt = (now - lastFrameTime) / 1000;
-    if (dt > 0.1) dt = 0.1; // Ограничение скачков
+    if (dt > 0.1) dt = 0.1; // Фильтрация фризов
     lastFrameTime = now;
 
-    // Подсчет FPS каждые 500мс
+    // Расчет FPS
     frameCount++;
     if (now - lastFpsUpdate >= 500) {
         fps = Math.round((frameCount * 1000) / (now - lastFpsUpdate));
@@ -266,13 +761,13 @@ function draw(now) {
 
     updatePlayer(dt);
 
-    // Рендер 3D пространства (Небо / Пол)
-    ctx.fillStyle = "#2a2a2a";
+    // Небо и земля главного 3D-экрана
+    ctx.fillStyle = "#1e293b"; // Сине-черное темное небо
     ctx.fillRect(0, 0, canvasWidth, canvasHeight / 2);
-    ctx.fillStyle = "#555555";
+    ctx.fillStyle = "#0f172a"; // Темно-серый асфальт
     ctx.fillRect(0, canvasHeight / 2, canvasWidth, canvasHeight / 2);
 
-    // ОПТИМИЗИРОВАННЫЙ RAYCASTING (шаг полосы = 2px)
+    // Основной Raycasting шаг рендера = 2 пикселя
     const rayStep = 2; 
 
     for (let x = 0; x < canvasWidth; x += rayStep) {
@@ -326,26 +821,31 @@ function draw(now) {
         else            perpWallDist = (mapY - player.y + (1 - stepY) / 2) / rayDirY;
 
         let wallHeight = canvasHeight / (perpWallDist + 0.0001);
-        let colorValue = Math.max(0, 255 - perpWallDist * 35);
+        let colorValue = Math.max(0, 230 - perpWallDist * 32);
 
+        // Отрисовка стен с мягким затуханием (глубокий бирюзово-зеленый оттенок)
         if (side === 1) {
-            ctx.fillStyle = `rgb(0, ${colorValue * 0.7}, 0)`; 
+            ctx.fillStyle = `rgb(10, ${colorValue * 0.45}, ${colorValue * 0.4})`; 
         } else {
-            ctx.fillStyle = `rgb(0, ${colorValue}, 0)`;
+            ctx.fillStyle = `rgb(16, ${colorValue * 0.65}, ${colorValue * 0.55})`;
         }
 
-        // Рисуем полосу шириной rayStep
         ctx.fillRect(x, (canvasHeight - wallHeight) / 2, rayStep, wallHeight);
     }
 
+    // Отрисовка PiP-камеры
+    renderCCTV();
+
+    // Рисуем интерфейс поверх 3D
     drawMinimap();
     drawFPS();
 
     requestAnimationFrame(draw);
 }
 
-// Запуск
+// Первичный запуск и рендер
 createEditor();
+updateCameraConfigPanel();
 requestAnimationFrame(draw);
 </script>
 </body>
