@@ -2,572 +2,345 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>3D Симулятор Квадрокоптера</title>
-    <!-- Подключаем Tailwind CSS для красивой верстки -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <title>3D Движок + Редактор карт + Мини-карта</title>
     <style>
         body {
-            background-color: #0d1117;
-            color: #c9d1d9;
-            font-family: monospace;
-            overflow-x: hidden;
+            background: #222;
+            color: #fff;
+            font-family: sans-serif;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+            box-sizing: border-box;
         }
-        /* Блокируем стандартную прокрутку страницы стрелками клавиатуры */
-        html, body {
-            touch-action: none;
+        .game-container {
+            position: relative;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.5);
         }
-        /* Свечение для элементов HUD */
-        .neon-border {
-            box-shadow: 0 0 10px rgba(16, 185, 129, 0.3);
+        canvas {
+            border: 2px solid #555;
+            background: #000;
+            display: block;
+        }
+        .editor-container {
+            margin-top: 20px;
+            background: #333;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #555;
+            text-align: center;
+        }
+        .editor-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 40px);
+            grid-gap: 2px;
+            margin-top: 10px;
+            background: #222;
+            padding: 5px;
+            border-radius: 4px;
+        }
+        .cell {
+            width: 40px;
+            height: 40px;
+            background: #444;
+            border: 1px solid #555;
+            cursor: pointer;
+            transition: background 0.1s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            user-select: none;
+        }
+        .cell.wall {
+            background: #00ff00;
+            border-color: #00cc00;
+        }
+        .cell.player-cell {
+            position: relative;
+        }
+        .cell.player-cell::after {
+            content: "🛸";
+            font-size: 18px;
+        }
+        .instructions {
+            margin-top: 10px;
+            font-size: 13px;
+            color: #aaa;
         }
     </style>
 </head>
-<body class="min-h-screen flex flex-col justify-between p-4 md:p-8">
+<body>
 
-    <header class="max-w-6xl w-full mx-auto mb-4">
-        <h1 class="text-2xl md:text-3xl font-extrabold text-emerald-400 tracking-wider">
-            DRONE_FLIGHT_SIM_V2.0
-        </h1>
-        <p class="text-xs text-gray-400 mt-1">
-            Интерактивный 3D-эмулятор полёта квадрокоптера с физикой инерции и редактором лабиринтов.
-        </p>
-    </header>
+    <!-- 3D Экран игры -->
+    <div class="game-container">
+        <canvas id="game" width="640" height="480"></canvas>
+    </div>
 
-    <main class="max-w-6xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-6 items-start flex-grow">
-        
-        <!-- Левая колонка: Основной 3D Экран симулятора -->
-        <div class="lg:col-span-8 flex flex-col gap-4">
-            <div class="relative bg-black rounded-lg border-2 border-emerald-500/50 overflow-hidden neon-border aspect-[16/10] w-full">
-                <!-- Главный холст 3D-рендеринга -->
-                <canvas id="game" width="800" height="500" class="w-full h-full block"></canvas>
-                
-                <!-- Встроенный HUD телеметрии сверху справа -->
-                <div class="absolute top-4 right-4 bg-black/80 border border-emerald-500/30 p-3 rounded font-mono text-xs text-emerald-400 space-y-1.5 w-48 backdrop-blur-sm pointer-events-none">
-                    <div class="font-bold border-b border-emerald-500/30 pb-1 mb-1 flex items-center gap-1.5">
-                        <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                        TELEMETRY_SYSTEM
-                    </div>
-                    <div>VELOCITY: <span id="hud-velocity">0</span> km/h</div>
-                    <div class="w-full bg-gray-900 h-1 rounded overflow-hidden">
-                        <div id="hud-velocity-bar" class="bg-emerald-500 h-full transition-all duration-100" style="width: 0%"></div>
-                    </div>
-                    <div>ALTITUDE: <span id="hud-altitude">1.2</span> m</div>
-                    <div>GYRO_ROT: <span class="text-emerald-300">STABLE</span></div>
-                    <div>FPS: <span id="hud-fps" class="text-emerald-300">--</span></div>
-                </div>
+    <!-- Редактор карты под экраном -->
+    <div class="editor-container">
+        <h3>🛠️ Интерактивный редактор карты</h3>
+        <p style="margin: 0; font-size: 14px; color: #ccc;">Кликайте по ячейкам, чтобы строить или убирать стены в реальном времени</p>
+        <div class="editor-grid" id="mapEditor"></div>
+        <div class="instructions">Управление: <b>Стрелочки</b> — движение и поворот камеры</div>
+    </div>
 
-                <!-- Небольшой радар миникарты, наложенный в верхнем левом углу основного экрана -->
-                <div class="absolute top-4 left-4 bg-black/80 border border-emerald-500/40 p-1.5 rounded-lg backdrop-blur-sm pointer-events-none">
-                    <canvas id="minimap" width="110" height="110" class="block"></canvas>
-                </div>
-            </div>
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const editorGrid = document.getElementById('mapEditor');
+const canvasWidth = canvas.width;
+const canvasHeight = canvas.height;
+
+// Переменные для расчета FPS
+let fps = 0;
+let frameCount = 0;
+let lastTime = performance.now();
+
+// Карта 8x7
+let map = [
+    [1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1]
+];
+const mapRows = map.length;
+const mapCols = map[0].length;
+
+// Векторный игрок
+let player = {
+    x: 3.5,
+    y: 3.5,
+    dirX: 1.0,   
+    dirY: 0.0,
+    planeX: 0.0, 
+    planeY: 0.66 
+};
+
+let keys = { ArrowUp: false, ArrowDown: false, ArrowLeft: false, ArrowRight: false };
+window.addEventListener('keydown', e => { if(e.code in keys) keys[e.code] = true; });
+window.addEventListener('keyup', e => { if(e.code in keys) keys[e.code] = false; });
+
+// --- ИНИЦИАЛИЗАЦИЯ РЕДАКТОРА КАРТЫ ---
+function createEditor() {
+    editorGrid.innerHTML = '';
+    for (let r = 0; r < mapRows; r++) {
+        for (let c = 0; c < mapCols; c++) {
+            const cell = document.createElement('div');
+            cell.classList.add('cell');
+            if (map[r][c] === 1) cell.classList.add('wall');
             
-            <!-- Инструкции для пилота -->
-            <p class="text-xs text-gray-400 text-center">
-                Используйте клавиши <strong class="text-emerald-400">Стрелочка Вверх/Вниз</strong> для разгона и <strong class="text-emerald-400">Влево/Вправо</strong> для крена и разворота.
-            </p>
-        </div>
+            // Отображаем иконку игрока на сетке редактора
+            if (Math.floor(player.y) === r && Math.floor(player.x) === c) {
+                cell.classList.add('player-cell');
+            }
 
-        <!-- Правая колонка: Редактор Карты и Легенда -->
-        <div class="lg:col-span-4 flex flex-col gap-6">
-            
-            <!-- Интерактивный редактор -->
-            <div class="bg-slate-900/50 border border-slate-700/60 p-5 rounded-xl backdrop-blur-sm">
-                <div class="flex justify-between items-center mb-4">
-                    <h2 class="text-sm font-bold text-slate-200 tracking-wide uppercase flex items-center gap-2">
-                        <span>📝</span> Редактор карты
-                    </h2>
-                    <span class="text-[10px] text-slate-400 font-mono">Сетка 10x10</span>
-                </div>
+            // Переключение стены по клику
+            cell.addEventListener('click', () => {
+                if (Math.floor(player.y) === r && Math.floor(player.x) === c) return;
                 
-                <p class="text-[11px] text-slate-400 mb-4 leading-relaxed">
-                    Клик по клетке сетки:<br>
-                    <span class="text-emerald-400"><strong>Клик</strong> — Поставить / Убрать стену</span><br>
-                    Полет дрона начнется с пустой стартовой позиции.
-                </p>
+                map[r][c] = map[r][c] === 1 ? 0 : 1;
+                cell.classList.toggle('wall');
+            });
 
-                <!-- Контейнер сетки-редактора -->
-                <div id="grid-editor" class="grid grid-cols-10 gap-0.5 bg-slate-950 p-2 rounded-lg border border-slate-800 mx-auto max-w-[280px] aspect-square">
-                    <!-- Заполняется динамически через JS -->
-                </div>
-            </div>
-
-            <!-- Инструкция и легенда -->
-            <div class="bg-slate-900/30 border border-slate-800/80 p-5 rounded-xl text-xs space-y-4">
-                <h3 class="font-bold text-slate-300 uppercase tracking-wider text-[11px]">Инструкция и легенда</h3>
-                
-                <div class="space-y-2.5">
-                    <div class="flex items-center gap-3">
-                        <div class="w-4 h-4 rounded bg-emerald-600 border border-emerald-400/50 shadow-inner"></div>
-                        <span class="text-slate-300">Зеленые стены (блокируют полёт)</span>
-                    </div>
-                    <div class="flex items-center gap-3">
-                        <div class="w-4 h-4 rounded bg-slate-800 border border-slate-700"></div>
-                        <span class="text-slate-400">Проходимые коридоры (свободный полёт)</span>
-                    </div>
-                    <div class="flex items-center gap-3 font-bold text-emerald-400">
-                        <span>🛸</span>
-                        <span>Ваш маневренный квадрокоптер</span>
-                    </div>
-                </div>
-
-                <div class="pt-2 border-t border-slate-800 text-slate-400 leading-relaxed text-[11px]">
-                    Физический движок имеет <strong class="text-slate-300">инерционное скольжение</strong>. 
-                    Ограничитель скорости жестко фиксирует предел в <strong class="text-emerald-400">30 км/ч</strong> для сохранения контроля над устройством в узких пространствах.
-                </div>
-            </div>
-
-        </div>
-    </main>
-
-    <footer class="max-w-6xl w-full mx-auto mt-6 pt-4 border-t border-slate-800/80 text-center text-[10px] text-slate-500 flex justify-between items-center">
-        <span>СТАТУС СИСТЕМЫ: ОНЛАЙН</span>
-        <span>DRONE SIMULATOR PRO v2.0</span>
-    </footer>
-
-    <!-- JS Логика работы приложения -->
-    <script>
-        // Настройки и карта по умолчанию (10x10)
-        // 1 - Стена, 0 - Пусто
-        const mapRows = 10;
-        const mapCols = 10;
-        let map = [
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 1, 1, 0, 0, 1, 1, 0, 1],
-            [1, 0, 1, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 0, 1, 0, 0, 0, 0, 1, 0, 1],
-            [1, 0, 1, 1, 0, 0, 1, 1, 0, 1],
-            [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
-            [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
-        ];
-
-        // Параметры Дрона (Игрока)
-        const player = {
-            x: 1.5,       // Координаты на карте
-            y: 1.5,
-            dirX: 1.0,    // Направление взгляда (вектор единичной длины)
-            dirY: 0.0,
-            planeX: 0.0,  // Плоскость камеры для проецирования (FOV 3D-вида)
-            planeY: 0.66, 
-            angle: 0.0,   // Текущий угол рыскания (yaw)
-            vx: 0.0,      // Векторные скорости для инерции
-            vy: 0.0,
-            speedLimit: 0.08, // Соответствует 30 км/ч
-            accel: 0.003,
-            friction: 0.95,
-            rotSpeed: 0.05
-        };
-
-        // Зажатые клавиши управления
-        const keys = {
-            ArrowUp: false,
-            ArrowDown: false,
-            ArrowLeft: false,
-            ArrowRight: false
-        };
-
-        // DOM Элементы
-        const gameCanvas = document.getElementById('game');
-        const gameCtx = gameCanvas.getContext('2d');
-        const minimapCanvas = document.getElementById('minimap');
-        const minimapCtx = minimapCanvas.getContext('2d');
-        
-        // HUD метрики
-        const hudVelocity = document.getElementById('hud-velocity');
-        const hudVelocityBar = document.getElementById('hud-velocity-bar');
-        const hudFps = document.getElementById('hud-fps');
-
-        // Переменные для расчета FPS
-        let lastTime = performance.now();
-        let frameCount = 0;
-
-        // Блокировка прокрутки окна при управлении стрелочками
-        window.addEventListener('keydown', (e) => {
-            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) {
-                e.preventDefault();
-            }
-            if (e.key in keys) keys[e.key] = true;
-        }, { passive: false });
-
-        window.addEventListener('keyup', (e) => {
-            if (e.key in keys) keys[e.key] = false;
-        });
-
-        // Сборка визуальной сетки-редактора в панели управления
-        function createEditor() {
-            const gridEditor = document.getElementById('grid-editor');
-            gridEditor.innerHTML = ''; // Очистка
-
-            for (let r = 0; r < mapRows; r++) {
-                for (let c = 0; c < mapCols; c++) {
-                    const cell = document.createElement('div');
-                    cell.className = "w-full h-full border border-slate-800 transition-all duration-150 cursor-pointer flex items-center justify-center text-xs relative select-none rounded-[2px]";
-                    
-                    // Обновляем состояние подсветки ячейки
-                    updateCellUI(cell, r, c);
-
-                    // Клик на ячейку - переключает состояние стены
-                    cell.addEventListener('click', () => {
-                        // Нельзя заблокировать стартовую ячейку дрона
-                        const currentDroneCellR = Math.floor(player.y);
-                        const currentDroneCellC = Math.floor(player.x);
-                        if (r === currentDroneCellR && c === currentDroneCellC) {
-                            return; // Блокировка изменения
-                        }
-
-                        // Переключаем стену
-                        if (map[r][c] === 1) {
-                            map[r][c] = 0; // Пусто
-                        } else {
-                            map[r][c] = 1; // Стена
-                        }
-
-                        updateCellUI(cell, r, c);
-                    });
-
-                    gridEditor.appendChild(cell);
-                }
-            }
+            editorGrid.appendChild(cell);
         }
+    }
+}
 
-        // Обновление интерфейса ячейки редактора
-        function updateCellUI(cell, r, c) {
-            cell.innerHTML = "";
-            cell.className = cell.className.replace(/bg-\S+/g, ''); // очищаем прошлые цвета фона
+// Обновление положения маркера игрока в редакторе
+function updateEditorPlayerMarker() {
+    const cells = editorGrid.children;
+    const pR = Math.floor(player.y);
+    const pC = Math.floor(player.x);
+    
+    for (let i = 0; i < cells.length; i++) {
+        cells[i].classList.remove('player-cell');
+    }
+    
+    const index = pR * mapCols + pC;
+    if (cells[index]) {
+        cells[index].classList.add('player-cell');
+    }
+}
 
-            // Проверяем, находится ли тут дрон в реальном времени
-            const currentDroneCellR = Math.floor(player.y);
-            const currentDroneCellC = Math.floor(player.x);
+function updatePlayer() {
+    let moveSpeed = 0.04;
+    let rotSpeed = 0.03;
 
-            if (r === currentDroneCellR && c === currentDroneCellC) {
-                cell.classList.add('bg-slate-900');
-                // Иконка дрона с динамическим поворотом
-                const droneEmoji = document.createElement('span');
-                droneEmoji.textContent = "🛸";
-                droneEmoji.style.transform = `rotate(${player.angle}rad)`;
-                droneEmoji.style.transition = "transform 0.1s linear";
-                droneEmoji.className = "text-[11px] drop-shadow-[0_0_4px_rgba(52,211,153,0.8)]";
-                cell.appendChild(droneEmoji);
-            } else if (map[r][c] === 1) {
-                cell.classList.add('bg-emerald-600', 'border-emerald-500/50');
+    if (keys.ArrowRight) {
+        let oldDirX = player.dirX;
+        player.dirX = player.dirX * Math.cos(rotSpeed) - player.dirY * Math.sin(rotSpeed);
+        player.dirY = oldDirX * Math.sin(rotSpeed) + player.dirY * Math.cos(rotSpeed);
+        let oldPlaneX = player.planeX;
+        player.planeX = player.planeX * Math.cos(rotSpeed) - player.planeY * Math.sin(rotSpeed);
+        player.planeY = oldPlaneX * Math.sin(rotSpeed) + player.planeY * Math.cos(rotSpeed);
+    }
+    if (keys.ArrowLeft) {
+        let oldDirX = player.dirX;
+        player.dirX = player.dirX * Math.cos(-rotSpeed) - player.dirY * Math.sin(-rotSpeed);
+        player.dirY = oldDirX * Math.sin(-rotSpeed) + player.dirY * Math.cos(-rotSpeed);
+        let oldPlaneX = player.planeX;
+        player.planeX = player.planeX * Math.cos(-rotSpeed) - player.planeY * Math.sin(-rotSpeed);
+        player.planeY = oldPlaneX * Math.sin(-rotSpeed) + player.planeY * Math.cos(-rotSpeed);
+    }
+
+    if (keys.ArrowUp) {
+        if (map[Math.floor(player.y)][Math.floor(player.x + player.dirX * moveSpeed)] === 0) player.x += player.dirX * moveSpeed;
+        if (map[Math.floor(player.y + player.dirY * moveSpeed)][Math.floor(player.x)] === 0) player.y += player.dirY * moveSpeed;
+    }
+    if (keys.ArrowDown) {
+        if (map[Math.floor(player.y)][Math.floor(player.x - player.dirX * moveSpeed)] === 0) player.x -= player.dirX * moveSpeed;
+        if (map[Math.floor(player.y - player.dirY * moveSpeed)][Math.floor(player.x)] === 0) player.y -= player.dirY * moveSpeed;
+    }
+
+    if (keys.ArrowUp || keys.ArrowDown || keys.ArrowLeft || keys.ArrowRight) {
+        updateEditorPlayerMarker();
+    }
+}
+
+// --- ОТРИСОВКА МИНИ-КАРТЫ ---
+function drawMinimap() {
+    const size = 16;
+    const offset = 15;
+    
+    // Фон мини-карты
+    ctx.fillStyle = "rgba(0, 0, 0, 0.5)";
+    ctx.fillRect(offset - 5, offset - 5, mapCols * size + 10, mapRows * size + 10);
+
+    for (let r = 0; r < mapRows; r++) {
+        for (let c = 0; c < mapCols; c++) {
+            if (map[r][c] === 1) {
+                ctx.fillStyle = "rgba(0, 255, 0, 0.8)";
             } else {
-                cell.classList.add('bg-slate-800', 'border-slate-700/30 hover:bg-slate-700/50');
+                ctx.fillStyle = "rgba(85, 85, 85, 0.4)";
             }
+            ctx.fillRect(offset + c * size, offset + r * size, size - 1, size - 1);
+        }
+    }
+
+    const pX = offset + player.x * size;
+    const pY = offset + player.y * size;
+
+    // Вектор взгляда
+    ctx.strokeStyle = "#ff3333";
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(pX, pY);
+    ctx.lineTo(pX + player.dirX * (size * 0.8), pY + player.dirY * (size * 0.8));
+    ctx.stroke();
+
+    // Точка игрока
+    ctx.fillStyle = "#ffffff";
+    ctx.beginPath();
+    ctx.arc(pX, pY, 4, 0, Math.PI * 2);
+    ctx.fill();
+}
+
+// --- ОТРИСОВКА ИНДИКАТОРА FPS ---
+function drawFPS() {
+    ctx.fillStyle = "#00ff00";
+    ctx.font = "bold 14px monospace";
+    ctx.fillText(`FPS: ${fps}`, 15, 465);
+}
+
+function draw(now) {
+    // Подсчет FPS
+    frameCount++;
+    if (now - lastTime >= 500) {
+        fps = Math.round((frameCount * 1000) / (now - lastTime));
+        frameCount = 0;
+        lastTime = now;
+    }
+
+    updatePlayer();
+
+    // Рендер 3D пространства (Небо / Пол)
+    ctx.fillStyle = "#2a2a2a";
+    ctx.fillRect(0, 0, canvasWidth, canvasHeight / 2);
+    ctx.fillStyle = "#555555";
+    ctx.fillRect(0, canvasHeight / 2, canvasWidth, canvasHeight / 2);
+
+    // Векторный Raycasting
+    for (let x = 0; x < canvasWidth; x++) {
+        let cameraX = 2 * x / canvasWidth - 1;
+        let rayDirX = player.dirX + player.planeX * cameraX;
+        let rayDirY = player.dirY + player.planeY * cameraX;
+
+        let mapX = Math.floor(player.x);
+        let mapY = Math.floor(player.y);
+
+        let deltaDistX = Math.abs(1 / (rayDirX || 0.00001));
+        let deltaDistY = Math.abs(1 / (rayDirY || 0.00001));
+
+        let stepX, stepY, sideDistX, sideDistY;
+
+        if (rayDirX < 0) {
+            stepX = -1;
+            sideDistX = (player.x - mapX) * deltaDistX;
+        } else {
+            stepX = 1;
+            sideDistX = (mapX + 1.0 - player.x) * deltaDistX;
+        }
+        if (rayDirY < 0) {
+            stepY = -1;
+            sideDistY = (player.y - mapY) * deltaDistY;
+        } else {
+            stepY = 1;
+            sideDistY = (mapY + 1.0 - player.y) * deltaDistY;
         }
 
-        // Синхронизация визуального вида всей сетки редактора (вызывать при каждом кадре для дрона)
-        function refreshEditorUI() {
-            const gridEditor = document.getElementById('grid-editor');
-            const cells = gridEditor.children;
-            let idx = 0;
-            for (let r = 0; r < mapRows; r++) {
-                for (let c = 0; c < mapCols; c++) {
-                    if (cells[idx]) {
-                        updateCellUI(cells[idx], r, c);
-                    }
-                    idx++;
-                }
-            }
-        }
-
-        // Обновление физической модели полёта дрона
-        function updatePhysics() {
-            // Повороты на месте (рыскание / Yaw)
-            if (keys.ArrowLeft) {
-                player.angle -= player.rotSpeed;
-                // Вращаем векторы взгляда и плоскости рендеринга
-                player.dirX = Math.cos(player.angle);
-                player.dirY = Math.sin(player.angle);
-                player.planeX = -player.planeY; 
-                player.planeY = player.dirX * 0.66; // Поддержание пропорций fov
-            }
-            if (keys.ArrowRight) {
-                player.angle += player.rotSpeed;
-                player.dirX = Math.cos(player.angle);
-                player.dirY = Math.sin(player.angle);
-                player.planeX = -player.planeY;
-                player.planeY = player.dirX * 0.66;
-            }
-
-            // Ускорения
-            if (keys.ArrowUp) {
-                player.vx += player.dirX * player.accel;
-                player.vy += player.dirY * player.accel;
-            }
-            if (keys.ArrowDown) {
-                player.vx -= player.dirX * player.accel;
-                player.vy -= player.dirY * player.accel;
-            }
-
-            // Применение трения воздуха
-            player.vx *= player.friction;
-            player.vy *= player.friction;
-
-            // Расчет текущей физической скорости
-            let speed = Math.hypot(player.vx, player.vy);
-
-            // Ограничитель скорости (жесткий предел в 30 км/ч)
-            if (speed > player.speedLimit) {
-                player.vx = (player.vx / speed) * player.speedLimit;
-                player.vy = (player.vy / speed) * player.speedLimit;
-                speed = player.speedLimit;
-            }
-
-            // Обновление HUD спидометра
-            const speedKmh = Math.round((speed / player.speedLimit) * 30);
-            hudVelocity.textContent = speedKmh;
-            hudVelocityBar.style.width = `${(speedKmh / 30) * 100}%`;
-
-            // Коллизии со стенами карты (разнесли обработку по осям X и Y для плавности скольжения)
-            const margin = 0.2; // Безопасное расстояние до стен лабиринта
-
-            // Сдвиг по оси X
-            let nextX = player.x + player.vx;
-            let checkCellX = Math.floor(nextX + (player.vx > 0 ? margin : -margin));
-            let checkCellY = Math.floor(player.y);
-            if (checkCellX >= 0 && checkCellX < mapCols && map[checkCellY][checkCellX] === 0) {
-                player.x = nextX;
+        let hit = 0, side = 0;
+        while (hit === 0) {
+            if (sideDistX < sideDistY) {
+                sideDistX += deltaDistX;
+                mapX += stepX;
+                side = 0;
             } else {
-                player.vx = 0; // остановка по X при коллизии
+                sideDistY += deltaDistY;
+                mapY += stepY;
+                side = 1;
             }
-
-            // Сдвиг по оси Y
-            let nextY = player.y + player.vy;
-            checkCellX = Math.floor(player.x);
-            checkCellY = Math.floor(nextY + (player.vy > 0 ? margin : -margin));
-            if (checkCellY >= 0 && checkCellY < mapRows && map[checkCellY][checkCellX] === 0) {
-                player.y = nextY;
-            } else {
-                player.vy = 0; // остановка по Y при коллизии
+            if (mapY < 0 || mapY >= mapRows || mapX < 0 || mapX >= mapCols) {
+                hit = 1; 
+                break;
             }
+            if (map[mapY][mapX] === 1) hit = 1;
         }
 
-        // Основной рендер псевдо-3D пространства лабиринта (Рейкастинг)
-        function render3DView() {
-            const w = gameCanvas.width;
-            const h = gameCanvas.height;
+        let perpWallDist;
+        if (side === 0) perpWallDist = (mapX - player.x + (1 - stepX) / 2) / rayDirX;
+        else            perpWallDist = (mapY - player.y + (1 - stepY) / 2) / rayDirY;
 
-            // Очищаем и рисуем потолок и пол градиентами глубины
-            gameCtx.fillStyle = '#070a13'; // Тёмный верх
-            gameCtx.fillRect(0, 0, w, h / 2);
-            gameCtx.fillStyle = '#141923'; // Серый низ
-            gameCtx.fillRect(0, h / 2, w, h / 2);
+        let wallHeight = canvasHeight / (perpWallDist + 0.0001);
+        let colorValue = Math.max(0, 255 - perpWallDist * 35);
 
-            // Буфер глубины для будущих спрайтов
-            const zBuffer = [];
-
-            // Проход по каждому столбцу экрана (лучевой метод)
-            for (let x = 0; x < w; x++) {
-                // Вычисляем угол проецируемого луча на экране
-                const cameraX = 2 * x / w - 1; 
-                const rayDirX = player.dirX + player.planeX * cameraX;
-                const rayDirY = player.dirY + player.planeY * cameraX;
-
-                // Положение в текущей ячейке карты
-                let mapX = Math.floor(player.x);
-                let mapY = Math.floor(player.y);
-
-                // Длина луча от одной стороны ячейки до следующей
-                const deltaDistX = (rayDirX === 0) ? Infinity : Math.abs(1 / rayDirX);
-                const deltaDistY = (rayDirY === 0) ? Infinity : Math.abs(1 / rayDirY);
-
-                let sideDistX, sideDistY;
-                let stepX, stepY;
-
-                let hit = 0; // Попали ли в стену?
-                let side; // Какая грань стены задета (0 - X, 1 - Y)
-
-                // Инициализируем направления шагов луча
-                if (rayDirX < 0) {
-                    stepX = -1;
-                    sideDistX = (player.x - mapX) * deltaDistX;
-                } else {
-                    stepX = 1;
-                    sideDistX = (mapX + 1.0 - player.x) * deltaDistX;
-                }
-                if (rayDirY < 0) {
-                    stepY = -1;
-                    sideDistY = (player.y - mapY) * deltaDistY;
-                } else {
-                    stepY = 1;
-                    sideDistY = (mapY + 1.0 - player.y) * deltaDistY;
-                }
-
-                // Алгоритм DDA (цикл прогона луча до стены)
-                while (hit === 0) {
-                    if (sideDistX < sideDistY) {
-                        sideDistX += deltaDistX;
-                        mapX += stepX;
-                        side = 0;
-                    } else {
-                        sideDistY += deltaDistY;
-                        mapY += stepY;
-                        side = 1;
-                    }
-                    
-                    // Проверяем выход за границы
-                    if (mapX < 0 || mapX >= mapCols || mapY < 0 || mapY >= mapRows) {
-                        break;
-                    }
-                    // Попадание в стену
-                    if (map[mapY][mapX] === 1) {
-                        hit = 1;
-                    }
-                }
-
-                // Расстояние до перпендикулярной стены (исключает искажение "рыбий глаз")
-                let perpWallDist;
-                if (side === 0) {
-                    perpWallDist = (mapX - player.x + (1 - stepX) / 2) / rayDirX;
-                } else {
-                    perpWallDist = (mapY - player.y + (1 - stepY) / 2) / rayDirY;
-                }
-
-                // Безопасное деление на ноль
-                if (perpWallDist <= 0) perpWallDist = 0.01;
-
-                // Запись расстояния в буфер глубины
-                zBuffer[x] = perpWallDist;
-
-                // Расчет высоты стены для вывода на экран
-                const lineHeight = Math.floor(h / perpWallDist);
-
-                // Координаты начала и конца вертикальной полосы стены
-                let drawStart = -lineHeight / 2 + h / 2;
-                if (drawStart < 0) drawStart = 0;
-                let drawEnd = lineHeight / 2 + h / 2;
-                if (drawEnd >= h) drawEnd = h - 1;
-
-                // Цвета текстур стен с учётом освещения (тени от углов)
-                let wallColor;
-                if (side === 1) {
-                    // Теневые грани (Y)
-                    wallColor = '#0b6623'; 
-                } else {
-                    // Прямые солнечные грани (X)
-                    wallColor = '#10b981';
-                }
-
-                // Эффект атмосферной глубины (затухание света с расстоянием)
-                gameCtx.strokeStyle = wallColor;
-                gameCtx.lineWidth = 1;
-                gameCtx.beginPath();
-                gameCtx.moveTo(x, drawStart);
-                gameCtx.lineTo(x, drawEnd);
-                gameCtx.stroke();
-
-                // Рисуем легкую симуляцию швов стен
-                const darkness = Math.min(1, 1.2 / perpWallDist);
-                gameCtx.fillStyle = `rgba(0,0,0,${1 - darkness})`;
-                gameCtx.fillRect(x, drawStart, 1, drawEnd - drawStart);
-            }
+        if (side === 1) {
+            ctx.fillStyle = `rgb(0, ${colorValue * 0.7}, 0)`; 
+        } else {
+            ctx.fillStyle = `rgb(0, ${colorValue}, 0)`;
         }
 
-        // Отрисовка компактного радара миникарты в верхнем углу
-        function renderMinimap() {
-            const w = minimapCanvas.width;
-            const h = minimapCanvas.height;
-            minimapCtx.clearRect(0, 0, w, h);
+        ctx.fillRect(x, (canvasHeight - wallHeight) / 2, 1, wallHeight);
+    }
 
-            // Серый фон радара
-            minimapCtx.fillStyle = 'rgba(10, 25, 10, 0.85)';
-            minimapCtx.fillRect(0, 0, w, h);
+    // Отрисовка мини-карты и FPS
+    drawMinimap();
+    drawFPS();
 
-            // Рамка миникарты
-            minimapCtx.strokeStyle = '#10b981';
-            minimapCtx.lineWidth = 2;
-            minimapCtx.strokeRect(0, 0, w, h);
+    requestAnimationFrame(draw);
+}
 
-            const cellSize = w / mapCols;
-
-            // Отрисовываем сетку и стены
-            for (let r = 0; r < mapRows; r++) {
-                for (let c = 0; c < mapCols; c++) {
-                    if (map[r][c] === 1) {
-                        minimapCtx.fillStyle = 'rgba(16, 185, 129, 0.5)';
-                        minimapCtx.fillRect(c * cellSize, r * cellSize, cellSize, cellSize);
-                    }
-                }
-            }
-
-            // Координаты дрона на миникарте
-            const droneX = player.x * cellSize;
-            const droneY = player.y * cellSize;
-
-            // 1. Рисуем конус обзора лучей
-            minimapCtx.fillStyle = 'rgba(16, 185, 129, 0.15)';
-            minimapCtx.beginPath();
-            minimapCtx.moveTo(droneX, droneY);
-            // Левый луч обзора
-            minimapCtx.lineTo(
-                droneX + (player.dirX - player.planeX) * 20,
-                droneY + (player.dirY - player.planeY) * 20
-            );
-            // Правый луч обзора
-            minimapCtx.lineTo(
-                droneX + (player.dirX + player.planeX) * 20,
-                droneY + (player.dirY + player.planeY) * 20
-            );
-            minimapCtx.closePath();
-            minimapCtx.fill();
-
-            // 2. Рисуем пульсирующий ореол дрона
-            const pulse = 4 + Math.abs(Math.sin(Date.now() * 0.005)) * 4;
-            minimapCtx.fillStyle = 'rgba(52, 211, 153, 0.4)';
-            minimapCtx.beginPath();
-            minimapCtx.arc(droneX, droneY, pulse, 0, Math.PI * 2);
-            minimapCtx.fill();
-
-            // 3. Точка самого квадрокоптера
-            minimapCtx.fillStyle = '#ffffff';
-            minimapCtx.beginPath();
-            minimapCtx.arc(droneX, droneY, 3.5, 0, Math.PI * 2);
-            minimapCtx.fill();
-
-            // Вектор текущего взгляда/носа дрона
-            minimapCtx.strokeStyle = '#f43f5e';
-            minimapCtx.lineWidth = 1.5;
-            minimapCtx.beginPath();
-            minimapCtx.moveTo(droneX, droneY);
-            minimapCtx.lineTo(droneX + player.dirX * 8, droneY + player.dirY * 8);
-            minimapCtx.stroke();
-        }
-
-        // Главный игровой цикл обновления физики и вызовов отрисовщиков
-        function loop(currentTime) {
-            // Расчет FPS (обновление каждые 500мс)
-            if (!currentTime) currentTime = performance.now();
-            frameCount++;
-            if (currentTime - lastTime >= 500) {
-                const fps = Math.round((frameCount * 1000) / (currentTime - lastTime));
-                hudFps.textContent = fps;
-                frameCount = 0;
-                lastTime = currentTime;
-            }
-
-            // Обновление состояния физики перемещений и коллизий
-            updatePhysics();
-
-            // Перерисовка основного 3D холста
-            render3DView();
-
-            // Отрисовка радара миникарты
-            renderMinimap();
-
-            // Синхронизация состояния сетки интерактивного редактора лабиринтов
-            refreshEditorUI();
-
-            // Запрос следующего кадра обновления
-            requestAnimationFrame(loop);
-        }
-
-        // Запуск
-        createEditor();
-        requestAnimationFrame(loop);
-    </script>
+// Запуск
+createEditor();
+requestAnimationFrame(draw);
+</script>
 </body>
 </html>
