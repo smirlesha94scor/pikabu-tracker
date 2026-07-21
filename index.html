@@ -981,7 +981,13 @@ function renderLoop(now) {
             );
             cctvCamera.lookAt(lookTarget);
 
+            // Скрываем 3D-модель самой камеры на время рендера её вида, чтобы объектив не перекрывал обзор
+            if (activeCam.mesh) activeCam.mesh.visible = false;
+
             cctvRenderer.render(scene, cctvCamera);
+
+            // Возвращаем видимость модели для отображения на основном экране дрона
+            if (activeCam.mesh) activeCam.mesh.visible = true;
         } else {
             cctvContainer.classList.add('hidden');
             cctvNoise.classList.remove('hidden');
