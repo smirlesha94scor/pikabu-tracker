@@ -342,19 +342,9 @@ function initThree() {
     cctvRenderer.setPixelRatio(1);
     cctvContainer.appendChild(cctvRenderer.domElement);
 
-    // Равномерный и чёткий свет для максимальной различимости стен
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+    // Полностью равномерный фоновый свет без затененных граней
+    const ambientLight = new THREE.AmbientLight(0xffffff, 1.0);
     scene.add(ambientLight);
-
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
-    dirLight.position.set(30, 50, 20);
-    dirLight.castShadow = false; // Отключаем генерацию теней от направленного света
-    scene.add(dirLight);
-
-    // Дополнительный заполняющий свет с противоположной стороны для различимости теневых сторон
-    const fillLight = new THREE.DirectionalLight(0x38bdf8, 0.35);
-    fillLight.position.set(-30, 20, -20);
-    scene.add(fillLight);
 
     // Создаем группы объектов
     wallGroup = new THREE.Group();
@@ -419,17 +409,14 @@ function buildEnvironment() {
         wallGroup.remove(wallGroup.children[0]);
     }
 
-    // Контрастный материал стены с flatShading для различимости объемов и граней
-    const wallMaterial = new THREE.MeshStandardMaterial({
-        color: 0x0d9488, // Насыщенный бирюзово-изумрудный тон
-        roughness: 0.3,
-        metalness: 0.1,
-        flatShading: true // Четкое выделение граней стен под светом
+    // Полностью яркий базовый материал стен без направленных теней и темных сторон
+    const wallMaterial = new THREE.MeshBasicMaterial({
+        color: 0x0d9488
     });
 
     // Пол
     const floorGeo = new THREE.PlaneGeometry(mapCols * CELL_SIZE, mapRows * CELL_SIZE);
-    const floorMat = new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8, side: THREE.DoubleSide });
+    const floorMat = new THREE.MeshBasicMaterial({ color: 0x1e293b, side: THREE.DoubleSide });
     const floor = new THREE.Mesh(floorGeo, floorMat);
     floor.rotation.x = Math.PI / 2;
     floor.position.set((mapCols * CELL_SIZE) / 2, 0, (mapRows * CELL_SIZE) / 2);
@@ -810,8 +797,8 @@ function updateCCTVCameraPositions() {
     camGeo.rotateX(Math.PI / 2);
     
     // Черные матовые материалы корпуса камеры
-    const activeCamMat = new THREE.MeshStandardMaterial({ color: 0x050505, roughness: 0.2, metalness: 0.8 });
-    const inactiveCamMat = new THREE.MeshStandardMaterial({ color: 0x111111, roughness: 0.4, metalness: 0.6 });
+    const activeCamMat = new THREE.MeshBasicMaterial({ color: 0x050505 });
+    const inactiveCamMat = new THREE.MeshBasicMaterial({ color: 0x111111 });
 
     // Красный объектив/LED индикатор активной камеры
     const activeLensMat = new THREE.MeshBasicMaterial({ color: 0xef4444 });
@@ -843,9 +830,6 @@ function updateCCTVCameraPositions() {
         const lensMesh = new THREE.Mesh(lensGeo, isSelectedOrActive ? activeLensMat : inactiveLensMat);
         lensMesh.position.set(0, 0, 0.6);
         mesh.add(lensMesh);
-
-        mesh.castShadow = true;
-        mesh.receiveShadow = true;
 
         mesh.traverse(child => {
             child.layers.set(0);
