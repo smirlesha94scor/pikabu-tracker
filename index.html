@@ -220,6 +220,27 @@
                 </div>
             </div>
 
+            <!-- Панель настройки цветов окружения -->
+            <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl shadow-xl">
+                <h3 class="text-sm font-bold text-gray-200 flex items-center gap-2 mb-3 uppercase tracking-wide">
+                    <span>🎨</span> Цвета окружения
+                </h3>
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="flex flex-col items-center gap-1.5 bg-gray-950 p-2.5 rounded-lg border border-gray-800">
+                        <span class="text-[11px] text-gray-300 font-medium">Стены</span>
+                        <input type="color" id="wallColorPicker" value="#0d9488" class="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0">
+                    </div>
+                    <div class="flex flex-col items-center gap-1.5 bg-gray-950 p-2.5 rounded-lg border border-gray-800">
+                        <span class="text-[11px] text-gray-300 font-medium">Пол</span>
+                        <input type="color" id="floorColorPicker" value="#1e293b" class="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0">
+                    </div>
+                    <div class="flex flex-col items-center gap-1.5 bg-gray-950 p-2.5 rounded-lg border border-gray-800">
+                        <span class="text-[11px] text-gray-300 font-medium">Потолок</span>
+                        <input type="color" id="ceilingColorPicker" value="#0f172a" class="w-8 h-8 rounded cursor-pointer bg-transparent border-0 p-0">
+                    </div>
+                </div>
+            </div>
+
             <!-- Инструкция -->
             <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl text-xs text-gray-400 flex flex-col gap-2 shadow-lg">
                 <span class="font-bold text-cyan-400 uppercase tracking-wider text-[10px]">Управление полетом:</span>
@@ -262,6 +283,13 @@ let player = {
 let cameras = [
     { gridX: 1.5, gridY: 1.5, angle: 0.78, pitch: -0.2, altitude: 3.5, mesh: null } // Камера по умолчанию с наклоном
 ];
+
+// Цвета окружения (стен, пола, потолка)
+let envColors = {
+    wall: '#0d9488',
+    floor: '#1e293b',
+    ceiling: '#0f172a'
+};
 
 let activeCameraIndex = 0;
 let selectedCameraIndex = null;
@@ -438,7 +466,7 @@ function buildEnvironment() {
 
     // Физически корректный материал стен с реагированием на свет для объема
     const wallMaterial = new THREE.MeshStandardMaterial({
-        color: 0x0d9488,
+        color: new THREE.Color(envColors.wall),
         roughness: 0.45,
         metalness: 0.15
     });
@@ -446,7 +474,7 @@ function buildEnvironment() {
     // Пол с объемной текстурой шероховатости
     const floorGeo = new THREE.PlaneGeometry(mapCols * CELL_SIZE, mapRows * CELL_SIZE);
     const floorMat = new THREE.MeshStandardMaterial({ 
-        color: 0x1e293b, 
+        color: new THREE.Color(envColors.floor), 
         roughness: 0.8,
         metalness: 0.2,
         side: THREE.DoubleSide 
@@ -459,7 +487,7 @@ function buildEnvironment() {
     // Потолок
     const ceilingGeo = new THREE.PlaneGeometry(mapCols * CELL_SIZE, mapRows * CELL_SIZE);
     const ceilingMat = new THREE.MeshStandardMaterial({ 
-        color: 0x0f172a, 
+        color: new THREE.Color(envColors.ceiling), 
         roughness: 0.9,
         side: THREE.DoubleSide 
     });
@@ -814,6 +842,32 @@ btnDeleteCam.addEventListener('click', () => {
     }
 });
 
+// Инициализация палитры выбора цвета
+function initColorPickers() {
+    const wallPicker = document.getElementById('wallColorPicker');
+    const floorPicker = document.getElementById('floorColorPicker');
+    const ceilingPicker = document.getElementById('ceilingColorPicker');
+
+    if (wallPicker) {
+        wallPicker.addEventListener('input', (e) => {
+            envColors.wall = e.target.value;
+            buildEnvironment();
+        });
+    }
+    if (floorPicker) {
+        floorPicker.addEventListener('input', (e) => {
+            envColors.floor = e.target.value;
+            buildEnvironment();
+        });
+    }
+    if (ceilingPicker) {
+        ceilingPicker.addEventListener('input', (e) => {
+            envColors.ceiling = e.target.value;
+            buildEnvironment();
+        });
+    }
+}
+
 // Синхронизация 3D-моделей камер на сцене Three.js
 function updateCCTVCameraPositions() {
     while (cctvMeshesGroup.children.length > 0) {
@@ -1083,6 +1137,7 @@ window.onload = function() {
         return;
     }
     initThree();
+    initColorPickers();
     createEditor();
     updateCameraConfigPanel();
     requestAnimationFrame(renderLoop);
