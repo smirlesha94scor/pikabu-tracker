@@ -208,7 +208,72 @@
                         </div>
 
                         <!-- Действия -->
-                        <div class="flex gap-2 pt-1">
+                <div class="flex gap-2 pt-1">
+                    <button id="btnMakeActiveCam" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs py-2 rounded transition shadow-md">
+                        Сделать активной
+                    </button>
+                    <button id="btnDeleteCam" class="bg-rose-900/60 hover:bg-rose-800 border border-rose-700 text-rose-200 font-semibold text-xs px-3 py-2 rounded transition">
+                        Удалить
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Инструкция -->
+        <div class="bg-gray-900 border border-gray-800 p-4 rounded-xl text-xs text-gray-400 flex flex-col gap-2 shadow-lg">
+            <span class="font-bold text-cyan-400 uppercase tracking-wider text-[10px]">Управление полетом:</span>
+            <p>• <b class="text-white">Стрелочка Вверх / Вниз</b> — движение дрона вперед и назад.</p>
+            <p>• <b class="text-white">Стрелочка Влево / Вправо</b> — разворот дрона по горизонтали.</p>
+            <p>• <b class="text-white">W / S</b> — регулировка высоты полета дрона (выше / ниже).</p>
+            <p class="text-emerald-400 font-semibold">Прокрутка страницы стрелками заблокирована во время игры.</p>
+        </div>
+    </div>
+</main>
+
+<script>
+// Данные карты 8x7
+let map = [
+    [1, 1, 1, 1, 1, 1, 1, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 0, 1, 0, 0, 1, 0, 1],
+    [1, 0, 0, 0, 0, 0, 0, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1]
+];
+const mapRows = map.length;
+const mapCols = map[0].length;
+
+// Параметры сетки Three.js (размер одной ячейки = 10 единиц)
+const CELL_SIZE = 10;
+
+// Игрок (Дрон) в координатах сетки (x, y) и высота полета altitude
+let player = {
+    gridX: 3.5,
+    gridY: 3.5,
+    altitude: 1.5, // в метрах (пересчитывается в 3D)
+    angle: 0,      // Направление (в радианах)
+    speed: 0,
+    rotSpeed: 0
+};
+
+// Список камер
+let cameras = [
+    { gridX: 1.5, gridY: 1.5, angle: 0.78, pitch: -0.2, altitude: 3.5, mesh: null }
+];
+
+let activeCameraIndex = 0;
+let selectedCameraIndex = null;
+let currentTool = 'wall';
+
+// Текстуры окружения (создаются процедурно для высокой производительности)
+let wallTexture, floorTexture, ceilingTexture;
+
+// Переменные для оптимизации отрисовки и кадровой частоты
+let lastGridX = -1;
+let lastGridY = -1;
+let cctvFrameCounter = 0;
+
                             <button id="btnMakeActiveCam" class="flex-1 bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs py-2 rounded transition shadow-md">
                                 Сделать активной
                             </button>
@@ -398,6 +463,9 @@ function initThree() {
     fillLight.position.set(-20, 15, -15);
     scene.add(fillLight);
 
+    // Генерируем процедурные текстуры для реалистичности
+    generateProceduralTextures();
+
     // Создаем группы объектов
     wallGroup = new THREE.Group();
     scene.add(wallGroup);
@@ -411,7 +479,99 @@ function initThree() {
     updateCCTVCameraPositions();
 }
 
-// Функция объединения геометрий в один единый Меш (убирает все швы и полосы)
+// Генератор реалистичных текстур (высокая скорость работы без сторонних файлов)
+function generateProceduralTextures() {
+    // 1. Текстура пола (Бетонная/Плиточная поверхность со швами)
+    const cvsFloor = document.createElement('canvas');
+    cvsFloor.width = 512;
+    cvsFloor.height = 512;
+    const ctxF = cvsFloor.getContext('2d');
+    
+    // Фон плитки
+    ctxF.fillStyle = '#1e2638';
+    ctxF.fillRect(0, 0, 512, 512);
+    
+    // Плиточный узор
+    ctxF.strokeStyle = '#0f172a';
+    ctxF.lineWidth = 4;
+    const tileSize = 64;
+    for (let x = 0; x <= 512; x += tileSize) {
+        ctxF.beginPath(); ctxF.moveTo(x, 0); ctxF.lineTo(x, 512); ctxF.stroke();
+    }
+    for (let y = 0; y <= 512; y += tileSize) {
+        ctxF.beginPath(); ctxF.moveTo(0, y); ctxF.lineTo(512, y); ctxF.stroke();
+    }
+    
+    // Легкий шумок для фактуры пола
+    for (let i = 0; i < 4000; i++) {
+        const rx = Math.random() * 512;
+        const ry = Math.random() * 512;
+        ctxF.fillStyle = Math.random() > 0.5 ? 'rgba(255,255,255,0.03)' : 'rgba(0,0,0,0.05)';
+        ctxF.fillRect(rx, ry, 2, 2);
+    }
+    
+    floorTexture = new THREE.CanvasTexture(cvsFloor);
+    floorTexture.wrapS = THREE.RepeatWrapping;
+    floorTexture.wrapT = THREE.RepeatWrapping;
+    floorTexture.repeat.set(mapCols, mapRows);
+
+    // 2. Текстура стен (Индустриальные панели с разметкой и заклёпками)
+    const cvsWall = document.createElement('canvas');
+    cvsWall.width = 512;
+    cvsWall.height = 512;
+    const ctxW = cvsWall.getContext('2d');
+    
+    // Базовый цвет панели
+    ctxW.fillStyle = '#1e293b';
+    ctxW.fillRect(0, 0, 512, 512);
+    
+    // Внутренние швы панелей
+    ctxW.strokeStyle = '#0f172a';
+    ctxW.lineWidth = 6;
+    ctxW.strokeRect(3, 3, 506, 506);
+    
+    // Декоративная сигнальная полоса внизу стены
+    ctxW.fillStyle = '#0284c7';
+    ctxW.fillRect(0, 470, 512, 12);
+    ctxW.fillStyle = '#0369a1';
+    ctxW.fillRect(0, 482, 512, 30);
+
+    // Заклепки по краям панелей
+    ctxW.fillStyle = '#475569';
+    for (let i = 20; i < 500; i += 40) {
+        ctxW.beginPath(); ctxW.arc(i, 16, 3, 0, Math.PI * 2); ctxW.fill();
+        ctxW.beginPath(); ctxW.arc(i, 454, 3, 0, Math.PI * 2); ctxW.fill();
+    }
+    
+    wallTexture = new THREE.CanvasTexture(cvsWall);
+    wallTexture.wrapS = THREE.RepeatWrapping;
+    wallTexture.wrapT = THREE.RepeatWrapping;
+
+    // 3. Текстура потолка (Модульные потолочные панели с источниками света)
+    const cvsCeil = document.createElement('canvas');
+    cvsCeil.width = 256;
+    cvsCeil.height = 256;
+    const ctxC = cvsCeil.getContext('2d');
+    
+    ctxC.fillStyle = '#0f172a';
+    ctxC.fillRect(0, 0, 256, 256);
+    ctxC.strokeStyle = '#1e293b';
+    ctxC.lineWidth = 4;
+    ctxC.strokeRect(0, 0, 256, 256);
+    
+    // Светильник
+    ctxC.fillStyle = '#38bdf8';
+    ctxC.fillRect(64, 64, 128, 128);
+    ctxC.fillStyle = '#e0f2fe';
+    ctxC.fillRect(72, 72, 112, 112);
+
+    ceilingTexture = new THREE.CanvasTexture(cvsCeil);
+    ceilingTexture.wrapS = THREE.RepeatWrapping;
+    ceilingTexture.wrapT = THREE.RepeatWrapping;
+    ceilingTexture.repeat.set(mapCols, mapRows);
+}
+
+// Функция объединения геометрий в один единый Меш
 function mergeGeometries(geometries) {
     let totalVertices = 0;
     let totalIndices = 0;
@@ -464,19 +624,19 @@ function buildEnvironment() {
         wallGroup.remove(wallGroup.children[0]);
     }
 
-    // Физически корректный материал стен с реагированием на свет для объема
+    // Материал стен с текстурой панелей
     const wallMaterial = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(envColors.wall),
-        roughness: 0.45,
-        metalness: 0.15
+        map: wallTexture,
+        roughness: 0.5,
+        metalness: 0.2
     });
 
-    // Пол с объемной текстурой шероховатости
+    // Пол с плиточным узором и реалистичным откликом на свет
     const floorGeo = new THREE.PlaneGeometry(mapCols * CELL_SIZE, mapRows * CELL_SIZE);
     const floorMat = new THREE.MeshStandardMaterial({ 
-        color: new THREE.Color(envColors.floor), 
-        roughness: 0.8,
-        metalness: 0.2,
+        map: floorTexture,
+        roughness: 0.35,
+        metalness: 0.25,
         side: THREE.DoubleSide 
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -487,8 +647,8 @@ function buildEnvironment() {
     // Потолок
     const ceilingGeo = new THREE.PlaneGeometry(mapCols * CELL_SIZE, mapRows * CELL_SIZE);
     const ceilingMat = new THREE.MeshStandardMaterial({ 
-        color: new THREE.Color(envColors.ceiling), 
-        roughness: 0.9,
+        map: ceilingTexture,
+        roughness: 0.8,
         side: THREE.DoubleSide 
     });
     const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
@@ -1137,7 +1297,6 @@ window.onload = function() {
         return;
     }
     initThree();
-    initColorPickers();
     createEditor();
     updateCameraConfigPanel();
     requestAnimationFrame(renderLoop);
