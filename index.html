@@ -352,17 +352,21 @@ function initThree() {
     cctvRenderer.setPixelRatio(1);
     cctvContainer.appendChild(cctvRenderer.domElement);
 
-    // Рассеянный базовый свет
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.45);
+    // Рассеянный базовый свет для всей карты
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.85);
     scene.add(ambientLight);
 
-    // Главный направленный свет для создания объемных светотеней на стенах
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
+    // Главный направленный свет для создания легких светотеней
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.0);
     dirLight.position.set(20, 45, 15);
     scene.add(dirLight);
 
-    // Заполняющий холодный свет с противоположного угла для проработки глубины углов
-    const fillLight = new THREE.DirectionalLight(0x06b6d4, 0.35);
+    // Равномерный полусферический свет для идеальной видимости по всей карте
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x475569, 0.6);
+    scene.add(hemiLight);
+
+    // Заполняющий холодный свет с противоположного угла
+    const fillLight = new THREE.DirectionalLight(0x06b6d4, 0.4);
     fillLight.position.set(-20, 15, -15);
     scene.add(fillLight);
 
@@ -531,13 +535,6 @@ function createDrone3D() {
     const lensMesh = new THREE.Mesh(lensGeo, lensMat);
     lensMesh.position.set(1.5, 0, 0);
     droneGroup.add(lensMesh);
-
-    // Носовой прожектор дрона для создания объема в узких коридорах
-    const headlight = new THREE.SpotLight(0x38bdf8, 2.5, 25, Math.PI / 3.5, 0.5, 1);
-    headlight.position.set(1.5, 0, 0);
-    headlight.target.position.set(10, 0, 0);
-    droneGroup.add(headlight);
-    droneGroup.add(headlight.target);
 
     // Лучи крепления
     const armMat = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.5 });
