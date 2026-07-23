@@ -404,50 +404,50 @@ function generateProceduralTextures() {
     floorTexture.wrapT = THREE.RepeatWrapping;
     floorTexture.repeat.set(mapCols, mapRows);
 
-    // 2. Индустриальные панели стен
+    // 2. Серые панели стен
     const cvsWall = document.createElement('canvas');
     cvsWall.width = 512;
     cvsWall.height = 512;
     const ctxW = cvsWall.getContext('2d');
     
-    ctxW.fillStyle = '#1e293b';
+    ctxW.fillStyle = '#4b5563';
     ctxW.fillRect(0, 0, 512, 512);
     
-    ctxW.strokeStyle = '#0f172a';
+    ctxW.strokeStyle = '#374151';
     ctxW.lineWidth = 6;
     ctxW.strokeRect(3, 3, 506, 506);
     
-    ctxW.fillStyle = '#0284c7';
-    ctxW.fillRect(0, 470, 512, 12);
-    ctxW.fillStyle = '#0369a1';
-    ctxW.fillRect(0, 482, 512, 30);
+    ctxW.fillStyle = '#1f2937';
+    ctxW.fillRect(0, 480, 512, 32);
 
-    ctxW.fillStyle = '#475569';
+    ctxW.fillStyle = '#6b7280';
     for (let i = 20; i < 500; i += 40) {
         ctxW.beginPath(); ctxW.arc(i, 16, 3, 0, Math.PI * 2); ctxW.fill();
-        ctxW.beginPath(); ctxW.arc(i, 454, 3, 0, Math.PI * 2); ctxW.fill();
+        ctxW.beginPath(); ctxW.arc(i, 464, 3, 0, Math.PI * 2); ctxW.fill();
     }
     
     wallTexture = new THREE.CanvasTexture(cvsWall);
     wallTexture.wrapS = THREE.RepeatWrapping;
     wallTexture.wrapT = THREE.RepeatWrapping;
 
-    // 3. Потолок со светильниками
+    // 3. Белый плиточный потолок
     const cvsCeil = document.createElement('canvas');
     cvsCeil.width = 256;
     cvsCeil.height = 256;
     const ctxC = cvsCeil.getContext('2d');
     
-    ctxC.fillStyle = '#0f172a';
+    ctxC.fillStyle = '#f8fafc';
     ctxC.fillRect(0, 0, 256, 256);
-    ctxC.strokeStyle = '#1e293b';
+    ctxC.strokeStyle = '#cbd5e1';
     ctxC.lineWidth = 4;
     ctxC.strokeRect(0, 0, 256, 256);
     
-    ctxC.fillStyle = '#38bdf8';
-    ctxC.fillRect(64, 64, 128, 128);
-    ctxC.fillStyle = '#e0f2fe';
-    ctxC.fillRect(72, 72, 112, 112);
+    for (let i = 0; i < 1200; i++) {
+        const rx = Math.random() * 256;
+        const ry = Math.random() * 256;
+        ctxC.fillStyle = Math.random() > 0.5 ? 'rgba(0,0,0,0.02)' : 'rgba(255,255,255,0.4)';
+        ctxC.fillRect(rx, ry, 2, 2);
+    }
 
     ceilingTexture = new THREE.CanvasTexture(cvsCeil);
     ceilingTexture.wrapS = THREE.RepeatWrapping;
@@ -505,16 +505,16 @@ function buildEnvironment() {
 
     const wallMaterial = new THREE.MeshStandardMaterial({
         map: wallTexture,
-        roughness: 0.5,
-        metalness: 0.2
+        roughness: 0.7,
+        metalness: 0.1
     });
 
-    // Пол
+    // Пол (без отсвета и ярких бликов)
     const floorGeo = new THREE.PlaneGeometry(mapCols * CELL_SIZE, mapRows * CELL_SIZE);
     const floorMat = new THREE.MeshStandardMaterial({ 
         map: floorTexture,
-        roughness: 0.35,
-        metalness: 0.25,
+        roughness: 0.98,
+        metalness: 0.0,
         side: THREE.DoubleSide 
     });
     const floor = new THREE.Mesh(floorGeo, floorMat);
@@ -522,11 +522,12 @@ function buildEnvironment() {
     floor.position.set((mapCols * CELL_SIZE) / 2, 0, (mapRows * CELL_SIZE) / 2);
     wallGroup.add(floor);
 
-    // Потолок
+    // Белый плиточный потолок
     const ceilingGeo = new THREE.PlaneGeometry(mapCols * CELL_SIZE, mapRows * CELL_SIZE);
     const ceilingMat = new THREE.MeshStandardMaterial({ 
         map: ceilingTexture,
-        roughness: 0.8,
+        roughness: 0.9,
+        metalness: 0.0,
         side: THREE.DoubleSide 
     });
     const ceiling = new THREE.Mesh(ceilingGeo, ceilingMat);
