@@ -47,7 +47,27 @@
 <body>
 
   <h2>Настройка уведомления</h2>
+<!-- Кнопка возврата на главную страницу index.html -->
+<a href="index.html" class="back-btn">← Вернуться на главную</a>
 
+<!-- Стили для кнопки возврата -->
+<style>
+  .back-btn {
+    display: inline-block;
+    margin-bottom: 20px;
+    padding: 8px 16px;
+    background-color: #6c757d;
+    color: white;
+    text-decoration: none;
+    border-radius: 4px;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    transition: background 0.2s;
+  }
+  .back-btn:hover {
+    background-color: #5a6268;
+  }
+</style>
   <div class="form-group">
     <label for="titleInput">Заголовок (Title):</label>
     <input type="text" id="titleInput" value="Новое сообщение!">
