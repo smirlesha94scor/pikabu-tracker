@@ -68,7 +68,7 @@
         <div class="col-span-1 lg:col-span-7 flex flex-col gap-4">
             <div class="relative bg-gray-950 border border-gray-800 rounded-2xl overflow-hidden shadow-2xl aspect-[4/3] w-full">
                 
-                <!-- Главный 3D холст (Содержит и основной вид, и CCTV через Scissor) -->
+                <!-- Главный 3D холст -->
                 <div id="canvas-container" class="w-full h-full block"></div>
 
                 <!-- Прелоадер загрузки карты -->
@@ -82,8 +82,8 @@
                 </div>
 
                 <!-- PIP Монитор CCTV (Внизу слева) -->
-                <div id="cctv-frame" class="absolute bottom-4 left-4 w-44 h-32 md:w-56 md:h-40 bg-black/80 backdrop-blur border-2 border-cyan-500 rounded-xl overflow-hidden shadow-2xl flex flex-col z-10 pointer-events-none">
-                    <div class="bg-cyan-950/90 px-2 py-1 text-[10px] text-cyan-400 font-bold flex justify-between items-center border-b border-cyan-800/50">
+                <div id="cctv-frame" class="absolute bottom-4 left-4 w-48 h-36 md:w-60 md:h-44 bg-black/90 backdrop-blur border-2 border-cyan-500 rounded-xl overflow-hidden shadow-2xl flex flex-col z-10 pointer-events-none">
+                    <div class="bg-cyan-950/90 px-2.5 py-1 text-[10px] text-cyan-400 font-bold flex justify-between items-center border-b border-cyan-800/50">
                         <span class="flex items-center gap-1.5">
                             <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse-red"></span>
                             CCTV_FEED <span id="cctv-label-id">#1</span>
@@ -253,12 +253,12 @@ const mapCols = map[0].length;
 // Параметры сетки Three.js (размер одной ячейки = 10 единиц)
 const CELL_SIZE = 10;
 
-// Игрок (Дрон) в координатах сетки (x, y) и высота полета altitude
+// Игрок (Дрон)
 let player = {
     gridX: 3.5,
     gridY: 3.5,
-    altitude: 1.5, // в метрах
-    angle: 0,      // Направление (в радианах)
+    altitude: 1.5,
+    angle: 0,
     speed: 0,
     rotSpeed: 0
 };
@@ -275,7 +275,7 @@ let currentTool = 'wall';
 // Текстуры окружения
 let wallTexture, floorTexture, ceilingTexture;
 
-// Переменные для оптимизации
+// Оптимизация сетки
 let lastGridX = -1;
 let lastGridY = -1;
 
@@ -330,30 +330,30 @@ function initThree() {
     playerCamera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
     playerCamera.layers.set(0);
 
-    // Единственный WebGL Renderer с низким энергопотреблением и высоким FPS
+    // Оптимизированный WebGL Renderer с единым фиксированным PixelRatio для 30-60+ FPS
     renderer = new THREE.WebGLRenderer({ 
         antialias: false, 
         powerPreference: "high-performance",
         precision: "mediump"
     });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+    renderer.setPixelRatio(1.0); // Гарантия высокой частоты кадров
     renderer.shadowMap.enabled = false;
     container.appendChild(renderer.domElement);
 
-    cctvCamera = new THREE.PerspectiveCamera(60, 224 / 160, 0.1, 1000);
+    cctvCamera = new THREE.PerspectiveCamera(60, 1.33, 0.1, 1000);
     cctvCamera.layers.enable(0);
     cctvCamera.layers.enable(1);
 
-    // Источники света для 3D объёма (MeshLambertMaterial)
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+    // Источники света для 3D объёма
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
     dirLight.position.set(20, 45, 15);
     scene.add(dirLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x334155, 0.5);
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x334155, 0.6);
     scene.add(hemiLight);
 
     generateProceduralTextures();
@@ -480,7 +480,6 @@ function buildEnvironment() {
         wallGroup.remove(wallGroup.children[0]);
     }
 
-    // Быстрый MeshLambertMaterial обеспечивает отличное 3D-освещение без тормозов
     const wallMaterial = new THREE.MeshLambertMaterial({
         map: wallTexture
     });
@@ -859,7 +858,7 @@ function updateCCTVCameraPositions() {
         const isSelectedOrActive = (idx === activeCameraIndex);
         
         const camX = cam.gridX * CELL_SIZE;
-        const camY = cam.altitude * (CELL_SIZE / 5);
+        const camY = Math.min(1.0 + cam.altitude * 1.4, 8.2);
         const camZ = cam.gridY * CELL_SIZE;
 
         const mesh = new THREE.Mesh(camGeo, isSelectedOrActive ? activeCamMat : inactiveCamMat);
@@ -973,8 +972,8 @@ function renderLoop(now) {
         lastFpsUpdate = now;
     }
 
-    // Троттлинг обновления текстовых элементов DOM раз в 100мс
-    if (now - lastTelemetryUpdate >= 100) {
+    // Троттлинг обновления текстовых элементов DOM раз в 150мс
+    if (now - lastTelemetryUpdate >= 150) {
         document.getElementById('posVal').innerText = `X: ${player.gridX.toFixed(1)}, Y: ${player.gridY.toFixed(1)}`;
         document.getElementById('altitudeVal').innerText = `${player.altitude.toFixed(1)} m`;
         lastTelemetryUpdate = now;
@@ -984,15 +983,14 @@ function renderLoop(now) {
 
     const width = container.clientWidth;
     const height = container.clientHeight;
-    const dpr = renderer.getPixelRatio();
 
-    // 1. Основной рендер сцены дрона (на полный экран холста)
+    // 1. Основной рендер сцены дрона
     renderer.setViewport(0, 0, width, height);
     renderer.setScissor(0, 0, width, height);
     renderer.setScissorTest(false);
     renderer.render(scene, playerCamera);
 
-    // 2. Вложенный рендер камеры CCTV через Scissor (Один WebGL-контекст)
+    // 2. Вложенный рендер камеры CCTV через Scissor
     const activeCam = cameras[activeCameraIndex];
     if (activeCam && cctvContainer) {
         cctvNoise.classList.add('hidden');
@@ -1002,7 +1000,7 @@ function renderLoop(now) {
 
         const camX = activeCam.gridX * CELL_SIZE;
         const camZ = activeCam.gridY * CELL_SIZE;
-        const camHeight = activeCam.altitude * (CELL_SIZE / 5);
+        const camHeight = Math.min(1.0 + activeCam.altitude * 1.4, 8.2);
 
         cctvCamera.position.set(camX, camHeight, camZ);
 
@@ -1012,27 +1010,31 @@ function renderLoop(now) {
             camHeight + Math.sin(camPitch) * 10,
             camZ + Math.sin(activeCam.angle) * Math.cos(camPitch) * 10
         );
+        cctvCamera.up.set(0, 1, 0);
         cctvCamera.lookAt(lookTarget);
 
-        // Получаем пиксельные координаты области мини-окна CCTV
         const rect = cctvContainer.getBoundingClientRect();
         const containerRect = container.getBoundingClientRect();
 
-        const pipX = (rect.left - containerRect.left) * dpr;
-        const pipY = (containerRect.bottom - rect.bottom) * dpr;
-        const pipWidth = rect.width * dpr;
-        const pipHeight = rect.height * dpr;
+        const pipX = Math.round(rect.left - containerRect.left);
+        const pipY = Math.round(containerRect.bottom - rect.bottom);
+        const pipWidth = Math.round(rect.width);
+        const pipHeight = Math.round(rect.height);
 
         if (pipWidth > 0 && pipHeight > 0) {
+            cctvCamera.aspect = pipWidth / pipHeight;
+            cctvCamera.updateProjectionMatrix();
+
             renderer.setViewport(pipX, pipY, pipWidth, pipHeight);
             renderer.setScissor(pipX, pipY, pipWidth, pipHeight);
             renderer.setScissorTest(true);
+
+            renderer.clearDepth();
 
             if (activeCam.mesh) activeCam.mesh.visible = false;
             renderer.render(scene, cctvCamera);
             if (activeCam.mesh) activeCam.mesh.visible = true;
 
-            // Восстанавливаем состояние теста ножниц
             renderer.setScissorTest(false);
         }
     } else if (cctvNoise) {
@@ -1117,7 +1119,6 @@ window.onload = function() {
     createEditor();
     updateCameraConfigPanel();
 
-    // Плавное скрытие прелоадера после завершения инициализации
     const preloader = document.getElementById('preloader');
     if (preloader) {
         preloader.classList.add('opacity-0', 'pointer-events-none');
