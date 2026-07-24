@@ -81,7 +81,7 @@
                     <div id="preloaderStatus" class="text-xs text-gray-400 mono">Оптимизация WebGL & Контекста</div>
                 </div>
 
-                <!-- PIP Монитор CCTV (Внизу слева) без прозрачного темного фона поверх видео -->
+                <!-- PIP Монитор CCTV (Внизу слева) -->
                 <div id="cctv-frame" class="absolute bottom-4 left-4 w-48 h-36 md:w-60 md:h-44 bg-transparent border-2 border-cyan-500 rounded-xl overflow-hidden shadow-2xl flex flex-col z-10 pointer-events-none">
                     <div class="bg-cyan-950 px-2.5 py-1 text-[10px] text-cyan-400 font-bold flex justify-between items-center border-b border-cyan-800/50">
                         <span class="flex items-center gap-1.5">
@@ -283,6 +283,7 @@ let fps = 0;
 let frameCount = 0;
 let lastFpsUpdate = performance.now();
 let lastTelemetryUpdate = 0;
+let lastCCTVRenderTime = 0;
 
 const container = document.getElementById('canvas-container');
 const cctvContainer = document.getElementById('cctv-container');
@@ -326,7 +327,7 @@ function initThree() {
         precision: "mediump"
     });
     renderer.setSize(width, height);
-    renderer.setPixelRatio(1.0);
+    renderer.setPixelRatio(1.0); // Зафиксировано на 1.0 для высокой производительности (30-60 FPS)
     renderer.shadowMap.enabled = false;
     container.appendChild(renderer.domElement);
 
@@ -334,16 +335,16 @@ function initThree() {
     cctvCamera.layers.enable(0);
     cctvCamera.layers.enable(1);
 
-    // Умеренный фоновый свет для сохранения объемных теней
+    // Умеренный фоновый свет
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
     scene.add(ambientLight);
 
-    // Мощный направленный источник света под углом для выявления граней и объёма
+    // Направленный главный свет под углом для разделения граней по тону (объем)
     const dirLight = new THREE.DirectionalLight(0xffffff, 1.25);
     dirLight.position.set(40, 60, 20);
     scene.add(dirLight);
 
-    // Мягкий подсвет теневых зон с противоположного угла
+    // Подсветка теневых сторон под противоположным углом
     const fillLight = new THREE.DirectionalLight(0x94a3b8, 0.45);
     fillLight.position.set(-30, 30, -30);
     scene.add(fillLight);
@@ -365,6 +366,7 @@ function initThree() {
 }
 
 function generateProceduralTextures() {
+    // 1. Текстура пола (плитка)
     const cvsFloor = document.createElement('canvas');
     cvsFloor.width = 256;
     cvsFloor.height = 256;
@@ -388,33 +390,29 @@ function generateProceduralTextures() {
     floorTexture.wrapT = THREE.RepeatWrapping;
     floorTexture.repeat.set(mapCols, mapRows);
 
+    // 2. Текстура стены (чистый реалистичный серый бетон/панель без темных рамок)
     const cvsWall = document.createElement('canvas');
     cvsWall.width = 256;
     cvsWall.height = 256;
     const ctxW = cvsWall.getContext('2d');
     
-    // Основной цвет стены
-    ctxW.fillStyle = '#4b5563';
+    // Единый чистый серый цвет
+    ctxW.fillStyle = '#64748b';
     ctxW.fillRect(0, 0, 256, 256);
-    
-    // Темная контрастная рамка по периметру блока, чтоб углы и грани четко разделялись
-    ctxW.strokeStyle = '#1e293b';
-    ctxW.lineWidth = 8;
-    ctxW.strokeRect(4, 4, 248, 248);
-    
-    // Внутренняя легкая фаска
-    ctxW.strokeStyle = '#6b7280';
-    ctxW.lineWidth = 2;
-    ctxW.strokeRect(10, 10, 236, 236);
 
-    // Темный контрастный плинтус внизу
-    ctxW.fillStyle = '#0f172a';
-    ctxW.fillRect(0, 232, 256, 24);
+    // Легкая едва заметная текстурность материала
+    ctxW.fillStyle = '#6b7280';
+    for (let i = 0; i < 150; i++) {
+        let rx = Math.random() * 256;
+        let ry = Math.random() * 256;
+        ctxW.fillRect(rx, ry, 2, 2);
+    }
 
     wallTexture = new THREE.CanvasTexture(cvsWall);
     wallTexture.wrapS = THREE.RepeatWrapping;
     wallTexture.wrapT = THREE.RepeatWrapping;
 
+    // 3. Текстура потолка (белые плитки)
     const cvsCeil = document.createElement('canvas');
     cvsCeil.width = 128;
     cvsCeil.height = 128;
@@ -482,7 +480,7 @@ function mergeGeometries(geometries) {
     if (uvs.length > 0) mergedGeo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     if (indices) mergedGeo.setIndex(new THREE.BufferAttribute(indices, 1));
 
-    // Не вызываем computeVertexNormals(), чтобы сохранить четкие 90-градусные нормали стен
+    // Важно: НЕ вызываем computeVertexNormals(), чтобы нормали граней кубов оставались строго четкими (без сглаживания углов)
     return mergedGeo;
 }
 
@@ -991,13 +989,13 @@ function renderLoop(now) {
     const width = container.clientWidth;
     const height = container.clientHeight;
 
-    // 1. Основной рендер сцены дрона
+    // 1. Основной рендер сцены дрона (всегда 60 FPS)
     renderer.setViewport(0, 0, width, height);
     renderer.setScissor(0, 0, width, height);
     renderer.setScissorTest(false);
     renderer.render(scene, playerCamera);
 
-    // 2. Вложенный рендер камеры CCTV через Scissor
+    // 2. Вложенный рендер камеры CCTV (оптимизированный троттлинг до 20 FPS для экономии графических ресурсов)
     const activeCam = cameras[activeCameraIndex];
     if (activeCam && cctvContainer) {
         cctvNoise.classList.add('hidden');
@@ -1005,44 +1003,49 @@ function renderLoop(now) {
         const deg = Math.round((activeCam.angle * 180) / Math.PI) % 360;
         document.getElementById('cctv-angle-label').innerText = `${deg < 0 ? deg + 360 : deg}°`;
 
-        const camX = activeCam.gridX * CELL_SIZE;
-        const camZ = activeCam.gridY * CELL_SIZE;
-        const camHeight = Math.max(1.0, Math.min(activeCam.altitude * 1.5, CELL_SIZE - 1.0));
+        // Рендерим CCTV только раз в 50мс (20 кадров в секунду), чтобы не снижать FPS игры
+        if (now - lastCCTVRenderTime >= 50) {
+            lastCCTVRenderTime = now;
 
-        cctvCamera.position.set(camX, camHeight, camZ);
+            const camX = activeCam.gridX * CELL_SIZE;
+            const camZ = activeCam.gridY * CELL_SIZE;
+            const camHeight = Math.max(1.0, Math.min(activeCam.altitude * 1.5, CELL_SIZE - 1.0));
 
-        const camPitch = activeCam.pitch || 0;
-        const lookTarget = new THREE.Vector3(
-            camX + Math.cos(activeCam.angle) * Math.cos(camPitch) * 10,
-            camHeight + Math.sin(camPitch) * 10,
-            camZ + Math.sin(activeCam.angle) * Math.cos(camPitch) * 10
-        );
-        cctvCamera.up.set(0, 1, 0);
-        cctvCamera.lookAt(lookTarget);
+            cctvCamera.position.set(camX, camHeight, camZ);
 
-        const rect = cctvContainer.getBoundingClientRect();
-        const canvasRect = renderer.domElement.getBoundingClientRect();
+            const camPitch = activeCam.pitch || 0;
+            const lookTarget = new THREE.Vector3(
+                camX + Math.cos(activeCam.angle) * Math.cos(camPitch) * 10,
+                camHeight + Math.sin(camPitch) * 10,
+                camZ + Math.sin(activeCam.angle) * Math.cos(camPitch) * 10
+            );
+            cctvCamera.up.set(0, 1, 0);
+            cctvCamera.lookAt(lookTarget);
 
-        const pipX = Math.round(rect.left - canvasRect.left);
-        const pipY = Math.round(canvasRect.bottom - rect.bottom);
-        const pipWidth = Math.round(rect.width);
-        const pipHeight = Math.round(rect.height);
+            const rect = cctvContainer.getBoundingClientRect();
+            const canvasRect = renderer.domElement.getBoundingClientRect();
 
-        if (pipWidth > 0 && pipHeight > 0) {
-            cctvCamera.aspect = pipWidth / pipHeight;
-            cctvCamera.updateProjectionMatrix();
+            const pipX = Math.round(rect.left - canvasRect.left);
+            const pipY = Math.round(canvasRect.bottom - rect.bottom);
+            const pipWidth = Math.round(rect.width);
+            const pipHeight = Math.round(rect.height);
 
-            renderer.setViewport(pipX, pipY, pipWidth, pipHeight);
-            renderer.setScissor(pipX, pipY, pipWidth, pipHeight);
-            renderer.setScissorTest(true);
+            if (pipWidth > 0 && pipHeight > 0) {
+                cctvCamera.aspect = pipWidth / pipHeight;
+                cctvCamera.updateProjectionMatrix();
 
-            renderer.clearDepth();
+                renderer.setViewport(pipX, pipY, pipWidth, pipHeight);
+                renderer.setScissor(pipX, pipY, pipWidth, pipHeight);
+                renderer.setScissorTest(true);
 
-            if (activeCam.mesh) activeCam.mesh.visible = false;
-            renderer.render(scene, cctvCamera);
-            if (activeCam.mesh) activeCam.mesh.visible = true;
+                renderer.clearDepth();
 
-            renderer.setScissorTest(false);
+                if (activeCam.mesh) activeCam.mesh.visible = false;
+                renderer.render(scene, cctvCamera);
+                if (activeCam.mesh) activeCam.mesh.visible = true;
+
+                renderer.setScissorTest(false);
+            }
         }
     } else if (cctvNoise) {
         cctvNoise.classList.remove('hidden');
