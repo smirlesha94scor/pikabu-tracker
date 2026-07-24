@@ -450,6 +450,7 @@ function mergeGeometries(geometries) {
 
     const positions = new Float32Array(totalVertices * 3);
     const normals = new Float32Array(totalVertices * 3);
+    const uvs = new Float32Array(totalVertices * 2);
     const indices = totalIndices > 0 ? new Uint32Array(totalIndices) : null;
 
     let vertexOffset = 0;
@@ -458,10 +459,12 @@ function mergeGeometries(geometries) {
     geometries.forEach(geo => {
         const pos = geo.attributes.position;
         const norm = geo.attributes.normal;
+        const uv = geo.attributes.uv;
         const idx = geo.index;
 
         positions.set(pos.array, vertexOffset * 3);
         if (norm) normals.set(norm.array, vertexOffset * 3);
+        if (uv) uvs.set(uv.array, vertexOffset * 2);
 
         if (idx) {
             for (let i = 0; i < idx.count; i++) {
@@ -476,9 +479,10 @@ function mergeGeometries(geometries) {
     const mergedGeo = new THREE.BufferGeometry();
     mergedGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
     mergedGeo.setAttribute('normal', new THREE.BufferAttribute(normals, 3));
+    if (uvs.length > 0) mergedGeo.setAttribute('uv', new THREE.BufferAttribute(uvs, 2));
     if (indices) mergedGeo.setIndex(new THREE.BufferAttribute(indices, 1));
 
-    mergedGeo.computeVertexNormals();
+    // Не вызываем computeVertexNormals(), чтобы сохранить четкие 90-градусные нормали стен
     return mergedGeo;
 }
 
