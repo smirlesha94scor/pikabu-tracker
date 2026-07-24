@@ -79,12 +79,12 @@
                     </div>
                     <div class="text-cyan-400 font-bold text-sm tracking-widest uppercase mb-1 animate-pulse">Загрузка 3D карты...</div>
                     <div id="preloaderStatus" class="text-xs text-gray-400 mono">Оптимизация WebGL & Контекста</div>
-            </div>
+                </div>
 
-            <!-- PIP Монитор CCTV (Внизу слева) без прозрачного темного фона поверх видео -->
-            <div id="cctv-frame" class="absolute bottom-4 left-4 w-48 h-36 md:w-60 md:h-44 bg-transparent border-2 border-cyan-500 rounded-xl overflow-hidden shadow-2xl flex flex-col z-10 pointer-events-none">
-                <div class="bg-cyan-950 px-2.5 py-1 text-[10px] text-cyan-400 font-bold flex justify-between items-center border-b border-cyan-800/50">
-                    <span class="flex items-center gap-1.5">
+                <!-- PIP Монитор CCTV (Внизу слева) без прозрачного темного фона поверх видео -->
+                <div id="cctv-frame" class="absolute bottom-4 left-4 w-48 h-36 md:w-60 md:h-44 bg-transparent border-2 border-cyan-500 rounded-xl overflow-hidden shadow-2xl flex flex-col z-10 pointer-events-none">
+                    <div class="bg-cyan-950 px-2.5 py-1 text-[10px] text-cyan-400 font-bold flex justify-between items-center border-b border-cyan-800/50">
+                        <span class="flex items-center gap-1.5">
                             <span class="w-2 h-2 bg-red-500 rounded-full animate-pulse-red"></span>
                             CCTV_FEED <span id="cctv-label-id">#1</span>
                         </span>
@@ -334,14 +334,21 @@ function initThree() {
     cctvCamera.layers.enable(0);
     cctvCamera.layers.enable(1);
 
-    const ambientLight = new THREE.AmbientLight(0xffffff, 0.95);
+    // Умеренный фоновый свет для сохранения объемных теней
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.35);
     scene.add(ambientLight);
 
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.85);
-    dirLight.position.set(20, 45, 15);
+    // Мощный направленный источник света под углом для выявления граней и объёма
+    const dirLight = new THREE.DirectionalLight(0xffffff, 1.25);
+    dirLight.position.set(40, 60, 20);
     scene.add(dirLight);
 
-    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x334155, 0.6);
+    // Мягкий подсвет теневых зон с противоположного угла
+    const fillLight = new THREE.DirectionalLight(0x94a3b8, 0.45);
+    fillLight.position.set(-30, 30, -30);
+    scene.add(fillLight);
+
+    const hemiLight = new THREE.HemisphereLight(0xffffff, 0x0f172a, 0.3);
     scene.add(hemiLight);
 
     generateProceduralTextures();
@@ -386,15 +393,23 @@ function generateProceduralTextures() {
     cvsWall.height = 256;
     const ctxW = cvsWall.getContext('2d');
     
+    // Основной цвет стены
     ctxW.fillStyle = '#4b5563';
     ctxW.fillRect(0, 0, 256, 256);
     
-    ctxW.strokeStyle = '#374151';
-    ctxW.lineWidth = 4;
-    ctxW.strokeRect(2, 2, 252, 252);
+    // Темная контрастная рамка по периметру блока, чтоб углы и грани четко разделялись
+    ctxW.strokeStyle = '#1e293b';
+    ctxW.lineWidth = 8;
+    ctxW.strokeRect(4, 4, 248, 248);
     
-    ctxW.fillStyle = '#1f2937';
-    ctxW.fillRect(0, 240, 256, 16);
+    // Внутренняя легкая фаска
+    ctxW.strokeStyle = '#6b7280';
+    ctxW.lineWidth = 2;
+    ctxW.strokeRect(10, 10, 236, 236);
+
+    // Темный контрастный плинтус внизу
+    ctxW.fillStyle = '#0f172a';
+    ctxW.fillRect(0, 232, 256, 24);
 
     wallTexture = new THREE.CanvasTexture(cvsWall);
     wallTexture.wrapS = THREE.RepeatWrapping;
